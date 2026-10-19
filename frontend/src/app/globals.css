@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+:root {
+  --color-text: #334155;
+  --color-bg: #F8FAFC;
+  --color-heading: #0F172A;
+  --color-highlight: #FFF0C5;
+  --color-button: #F1A344;
+  --color-button-text: #0F172A;
+}
+
+@theme {
+  --color-text: var(--color-text);
+  --color-bg: var(--color-bg);
+  --color-heading: var(--color-heading);
+  --color-highlight: var(--color-highlight);
+  --color-button: var(--color-button);
+  --color-button-text: var(--color-button-text);
+}
