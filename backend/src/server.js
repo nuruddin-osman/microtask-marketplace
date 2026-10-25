@@ -1,16 +1,31 @@
-const express = require('express');
+require("dotenv").config();
+
+const express = require("express");
+const cors = require("cors");
+const helmet = require("helmet");
+
 const app = express();
-const PORT = process.env.PORT || 3000;
 
-// Middleware to parse incoming JSON requests
+const PORT = process.env.PORT || 5000;
+
+const connectDB = require("./config/db");
+
+// Global middleware
+app.use(helmet());
+app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// A simple test route
-app.get('/', (req, res) => {
-  res.send('Backend is running successfully!');
+// Health check
+app.get("/api/v1/health", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "Microtask Marketplace API is running",
+  });
 });
 
-// Start the server
+connectDB();
+// Start server
 app.listen(PORT, () => {
-  console.log(`Server is listening on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
