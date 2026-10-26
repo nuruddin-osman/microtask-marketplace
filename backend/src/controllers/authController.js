@@ -141,4 +141,18 @@ const loginUser = async (req, res) => {
   }
 };
 
-module.exports = { registerUser, loginUser };
+const getMe = async (req, res) => {
+  return res.status(200).json({
+    success: true,
+    user: {
+      id: req.user._id,
+      name: req.user.name,
+      email: req.user.email,
+      role: req.user.role,
+      walletBalance: req.user.walletBalance,
+      isActive: req.user.isActive,
+    },
+  });
+};
+
+module.exports = { registerUser, loginUser, getMe };
