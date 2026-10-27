@@ -1,0 +1,5 @@
+$kind: http-request
+name: admin/tasks/pending
+url: ""
+method: GET
+order: 3000

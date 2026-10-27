@@ -118,4 +118,72 @@ const getTasks = async (req, res) => {
   }
 };
 
-module.exports = { createTask, getTasks };
+const getPendingTasks = async (req, res) => {
+  try {
+    const tasks = await Task.find({ status: "pending" })
+      .populate("advertiser", "name email")
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      count: tasks.length,
+      tasks,
+    });
+  } catch (error) {
+    console.error("Get pending tasks error:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+const reviewTask = async (req, res) => {
+  try {
+    const { status } = req.body || {};
+    const { id } = req.params;
+
+    if (!["active", "rejected"].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Status must be active or rejected",
+      });
+    }
+
+    if (!require("mongoose").isValidObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid task ID",
+      });
+    }
+
+    const task = await Task.findOneAndUpdate(
+      { _id: id, status: "pending" },
+      { $set: { status } },
+      { new: true, runValidators: true },
+    );
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: "Pending task not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Task ${status === "active" ? "approved" : "rejected"} successfully`,
+      task,
+    });
+  } catch (error) {
+    console.error("Review task error:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+module.exports = { createTask, getTasks, getPendingTasks, reviewTask };

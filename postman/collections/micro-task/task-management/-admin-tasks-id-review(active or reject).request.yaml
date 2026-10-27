@@ -1,0 +1,5 @@
+$kind: http-request
+name: /admin/tasks/:id/review(active or reject)
+url: ""
+method: GET
+order: 4000

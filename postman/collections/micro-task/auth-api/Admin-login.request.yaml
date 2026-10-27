@@ -1,0 +1,5 @@
+$kind: http-request
+name: Admin/login
+url: ""
+method: GET
+order: 9000

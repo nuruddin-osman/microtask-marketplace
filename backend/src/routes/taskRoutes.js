@@ -4,7 +4,12 @@ const {
   authorizeRoles,
   requireActiveMode,
 } = require("../middleware/roleMiddleware");
-const { createTask, getTasks } = require("../controllers/taskController");
+const {
+  createTask,
+  getTasks,
+  reviewTask,
+  getPendingTasks,
+} = require("../controllers/taskController");
 
 const router = express.Router();
 
@@ -22,6 +27,22 @@ router.get(
   authorizeRoles("freelancer"),
   requireActiveMode("freelancer"),
   getTasks,
+);
+
+// Admin: View pending tasks
+router.get(
+  "/admin/tasks/pending",
+  protect,
+  authorizeRoles("admin"),
+  getPendingTasks,
+);
+
+// Admin: Approve or reject a pending task
+router.patch(
+  "/admin/tasks/:id/review",
+  protect,
+  authorizeRoles("admin"),
+  reviewTask,
 );
 
 module.exports = router;
