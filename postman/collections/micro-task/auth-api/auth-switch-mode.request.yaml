@@ -1,0 +1,5 @@
+$kind: http-request
+name: auth/switch-mode
+url: ""
+method: GET
+order: 5000

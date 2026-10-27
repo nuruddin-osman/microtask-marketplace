@@ -25,10 +25,16 @@ const userSchema = new mongoose.Schema(
       select: false,
     },
 
-    role: {
+    roles: {
+      type: [String],
+      enum: ["freelancer", "buyer", "admin"],
+      default: ["freelancer", "buyer"],
+    },
+
+    activeMode: {
       type: String,
-      enum: ["worker", "advertiser", "admin"],
-      default: "worker",
+      enum: ["freelancer", "buyer"],
+      default: "freelancer",
     },
 
     walletBalance: {
