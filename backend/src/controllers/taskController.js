@@ -1,4 +1,6 @@
+const mongoose = require("mongoose");
 const Task = require("../models/taskModels");
+const TaskSubmission = require("../models/taskSubmissionModels");
 
 const createTask = async (req, res) => {
   try {
@@ -186,4 +188,102 @@ const reviewTask = async (req, res) => {
   }
 };
 
-module.exports = { createTask, getTasks, getPendingTasks, reviewTask };
+const acceptTask = async (req, res) => {
+  const session = await mongoose.startSession();
+
+  try {
+    const { id } = req.params;
+    const freelancerId = req.user._id;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid task ID",
+      });
+    }
+
+    let submission;
+
+    await session.withTransaction(async () => {
+      // Only active tasks with available slots can be accepted.
+      const task = await Task.findOneAndUpdate(
+        {
+          _id: id,
+          status: "active",
+          $expr: { $lt: ["$completedSlots", "$totalSlots"] },
+        },
+        { $inc: { completedSlots: 1 } },
+        { new: true, session },
+      );
+
+      if (!task) {
+        const error = new Error("TASK_UNAVAILABLE");
+        throw error;
+      }
+
+      const existing = await TaskSubmission.findOne({
+        task: id,
+        freelancer: freelancerId,
+      }).session(session);
+
+      if (existing) {
+        const error = new Error("ALREADY_ACCEPTED");
+        throw error;
+      }
+
+      [submission] = await TaskSubmission.create(
+        [
+          {
+            task: id,
+            freelancer: freelancerId,
+            status: "accepted",
+          },
+        ],
+        { session },
+      );
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Task accepted successfully",
+      submission,
+    });
+  } catch (error) {
+    if (
+      error.message === "TASK_UNAVAILABLE" ||
+      error.message === "ALREADY_ACCEPTED"
+    ) {
+      return res.status(409).json({
+        success: false,
+        message:
+          error.message === "ALREADY_ACCEPTED"
+            ? "You have already accepted this task"
+            : "Task is unavailable or all slots are filled",
+      });
+    }
+
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "You have already accepted this task",
+      });
+    }
+
+    console.error("Accept task error:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  } finally {
+    await session.endSession();
+  }
+};
+
+module.exports = {
+  createTask,
+  getTasks,
+  getPendingTasks,
+  reviewTask,
+  acceptTask,
+};
