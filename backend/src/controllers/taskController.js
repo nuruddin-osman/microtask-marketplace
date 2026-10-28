@@ -280,10 +280,60 @@ const acceptTask = async (req, res) => {
   }
 };
 
+const submitProof = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { proofText, proofUrl } = req.body;
+
+    // At least one proof is required
+    if ((!proofText || !proofText.trim()) && (!proofUrl || !proofUrl.trim())) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide proof text or proof URL",
+      });
+    }
+
+    // Find submission belonging to the logged-in freelancer
+    const submission = await TaskSubmission.findOne({
+      _id: id,
+      freelancer: req.user._id,
+      status: "accepted",
+    });
+
+    if (!submission) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Accepted submission not found, or proof has already been submitted",
+      });
+    }
+
+    submission.proofText = proofText?.trim() || "";
+    submission.proofUrl = proofUrl?.trim() || "";
+    submission.status = "submitted";
+
+    await submission.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Proof submitted successfully",
+      submission,
+    });
+  } catch (error) {
+    console.error("Submit proof error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to submit proof",
+    });
+  }
+};
+
 module.exports = {
   createTask,
   getTasks,
   getPendingTasks,
   reviewTask,
   acceptTask,
+  submitProof,
 };
