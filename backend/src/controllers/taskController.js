@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Task = require("../models/taskModels");
 const TaskSubmission = require("../models/taskSubmissionModels");
 const User = require("../models/userModels");
+const WalletTransaction = require("../models/walletTransactionModels");
 
 const createTask = async (req, res) => {
   try {
@@ -412,19 +413,63 @@ const reviewSubmission = async (req, res) => {
 
       // Credit freelancer wallet only when approved
       if (status === "approved") {
-        const walletUpdate = await User.updateOne(
-          { _id: submission.freelancer },
-          {
-            $inc: {
-              walletBalance: task.rewardPerWorker,
-            },
-          },
-          { session },
+        const freelancer = await User.findById(submission.freelancer).session(
+          session,
         );
 
-        if (walletUpdate.matchedCount !== 1) {
-          throw new Error("Freelancer account not found");
+        if (!freelancer) {
+          throw new Error("Freelancer not found");
         }
+
+        // Prevent duplicate reward
+        const existingTransaction = await WalletTransaction.findOne({
+          relatedSubmission: submission._id,
+          type: "task_reward",
+        }).session(session);
+
+        if (existingTransaction) {
+          throw new Error("Reward already credited for this submission");
+        }
+
+        const balanceBefore = freelancer.walletBalance;
+
+        if (!Number.isFinite(balanceBefore) || balanceBefore < 0) {
+          throw new Error("Invalid freelancer wallet balance");
+        }
+
+        const reward = Number(task.rewardPerWorker);
+
+        if (!Number.isFinite(reward) || reward <= 0) {
+          throw new Error("Invalid task reward amount");
+        }
+
+        const balanceAfter = Number((balanceBefore + reward).toFixed(2));
+
+        if (!Number.isFinite(balanceAfter)) {
+          throw new Error("Invalid wallet balance calculation");
+        }
+
+        freelancer.walletBalance = balanceAfter;
+
+        await freelancer.save({ session });
+
+        await WalletTransaction.create(
+          [
+            {
+              user: freelancer._id,
+              type: "task_reward",
+              amount: reward,
+              status: "completed",
+              balanceBefore,
+              balanceAfter,
+              relatedTask: task._id,
+              relatedSubmission: submission._id,
+              note: "Task reward credited",
+              processedBy: req.user._id,
+            },
+          ],
+          { session },
+        );
       }
     });
 

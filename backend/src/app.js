@@ -6,8 +6,10 @@ app.use(express.urlencoded({ extended: true }));
 
 const authRoutes = require("./routes/authRoutes");
 const taskRoutes = require("./routes/taskRoutes");
+const walletRoutes = require("./routes/walletRoutes");
 
 app.use("/api", authRoutes);
 app.use("/api", taskRoutes);
+app.use("/api", walletRoutes);
 
 module.exports = app;
