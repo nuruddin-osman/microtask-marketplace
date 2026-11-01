@@ -1,0 +1,5 @@
+$kind: http-request
+name: admin deposit request accept or reject korbe /admin/wallet/deposits/:id/review
+url: ""
+method: GET
+order: 3000

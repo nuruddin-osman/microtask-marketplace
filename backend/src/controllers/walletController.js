@@ -1,3 +1,4 @@
+const User = require("../models/userModels");
 const WalletTransaction = require("../models/walletTransactionModels");
 
 const getWalletBalance = async (req, res) => {
@@ -40,6 +41,7 @@ const getWalletTransactions = async (req, res) => {
   }
 };
 
+// Deposit Request Controller
 const createDepositRequest = async (req, res) => {
   try {
     const { amount, paymentMethod, transactionReference, note } = req.body;
@@ -100,8 +102,159 @@ const createDepositRequest = async (req, res) => {
   }
 };
 
+// Pending Deposit List Controller
+const getPendingDeposits = async (req, res) => {
+  try {
+    const deposits = await WalletTransaction.find({
+      type: "deposit",
+      status: "pending",
+    })
+      .populate("user", "name email")
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      count: deposits.length,
+      deposits,
+    });
+  } catch (error) {
+    console.error("Get pending deposits error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to get pending deposits",
+    });
+  }
+};
+
+// Admin Deposit Review Controller
+const reviewDepositRequest = async (req, res) => {
+  const mongoose = require("mongoose");
+  const { id } = req.params;
+  const { status } = req.body;
+
+  if (!mongoose.isValidObjectId(id)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid deposit ID",
+    });
+  }
+
+  if (!["approved", "rejected"].includes(status)) {
+    return res.status(400).json({
+      success: false,
+      message: "Status must be approved or rejected",
+    });
+  }
+
+  const session = await mongoose.startSession();
+
+  try {
+    let reviewedDeposit;
+
+    await session.withTransaction(async () => {
+      const deposit = await WalletTransaction.findOne({
+        _id: id,
+        type: "deposit",
+        status: "pending",
+      }).session(session);
+
+      if (!deposit) {
+        const error = new Error(
+          "Deposit request not found or already reviewed",
+        );
+        error.statusCode = 404;
+        throw error;
+      }
+
+      const user = await User.findById(deposit.user).session(session);
+
+      if (!user) {
+        const error = new Error("User not found");
+        error.statusCode = 404;
+        throw error;
+      }
+
+      const updateData = {
+        status: status === "approved" ? "completed" : "rejected",
+        processedBy: req.user._id,
+      };
+
+      // Credit wallet only when approved
+      if (status === "approved") {
+        const balanceBefore = user.walletBalance;
+        const amount = Number(deposit.amount);
+
+        if (
+          !Number.isFinite(balanceBefore) ||
+          balanceBefore < 0 ||
+          !Number.isFinite(amount) ||
+          amount <= 0
+        ) {
+          throw new Error("Invalid wallet balance or deposit amount");
+        }
+
+        const balanceAfter = Number((balanceBefore + amount).toFixed(2));
+
+        if (!Number.isFinite(balanceAfter)) {
+          throw new Error("Invalid wallet balance calculation");
+        }
+
+        user.walletBalance = balanceAfter;
+
+        await user.save({ session });
+
+        updateData.balanceBefore = balanceBefore;
+        updateData.balanceAfter = balanceAfter;
+      }
+
+      reviewedDeposit = await WalletTransaction.findOneAndUpdate(
+        {
+          _id: id,
+          type: "deposit",
+          status: "pending",
+        },
+        {
+          $set: updateData,
+        },
+        {
+          new: true,
+          runValidators: true,
+          session,
+        },
+      );
+
+      if (!reviewedDeposit) {
+        const error = new Error("Deposit request has already been reviewed");
+        error.statusCode = 409;
+        throw error;
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      message:
+        status === "approved"
+          ? "Deposit approved and wallet credited successfully"
+          : "Deposit request rejected successfully",
+      deposit: reviewedDeposit,
+    });
+  } catch (error) {
+    console.error("Review deposit error:", error);
+
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || "Failed to review deposit",
+    });
+  } finally {
+    await session.endSession();
+  }
+};
+
 module.exports = {
   getWalletBalance,
   getWalletTransactions,
   createDepositRequest,
+  getPendingDeposits,
+  reviewDepositRequest,
 };
