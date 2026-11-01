@@ -12,6 +12,8 @@ const {
   acceptTask,
   submitProof,
   reviewSubmission,
+  getBuyerSubmissions,
+  getBuyerSubmissionDetails,
 } = require("../controllers/taskController");
 
 const router = express.Router();
@@ -70,6 +72,22 @@ router.patch(
   authorizeRoles("buyer"),
   requireActiveMode("buyer"),
   reviewSubmission,
+);
+
+router.get(
+  "/buyer/submissions",
+  protect,
+  authorizeRoles("buyer"),
+  requireActiveMode("buyer"),
+  getBuyerSubmissions,
+);
+
+router.get(
+  "/buyer/submissions/:id",
+  protect,
+  authorizeRoles("buyer"),
+  requireActiveMode("buyer"),
+  getBuyerSubmissionDetails,
 );
 
 module.exports = router;

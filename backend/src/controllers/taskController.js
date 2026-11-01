@@ -448,6 +448,87 @@ const reviewSubmission = async (req, res) => {
   }
 };
 
+const getBuyerSubmissions = async (req, res) => {
+  try {
+    // Find all tasks created by the logged-in buyer
+    const buyerTasks = await Task.find({
+      advertiser: req.user._id,
+    }).select("_id");
+
+    const taskIds = buyerTasks.map((task) => task._id);
+
+    // Find submissions belonging to those tasks
+    const submissions = await TaskSubmission.find({
+      task: { $in: taskIds },
+    })
+      .populate("task", "title category rewardPerWorker")
+      .populate("freelancer", "name email")
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      count: submissions.length,
+      submissions,
+    });
+  } catch (error) {
+    console.error("Get buyer submissions error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch buyer submissions",
+    });
+  }
+};
+
+const getBuyerSubmissionDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!require("mongoose").isValidObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid submission ID",
+      });
+    }
+
+    // Find submission and populate related information
+    const submission = await TaskSubmission.findById(id)
+      .populate({
+        path: "task",
+        select:
+          "title description instructions category rewardPerWorker totalSlots status advertiser",
+      })
+      .populate("freelancer", "name email");
+
+    if (!submission || !submission.task) {
+      return res.status(404).json({
+        success: false,
+        message: "Submission not found",
+      });
+    }
+
+    // Only the buyer who created this task can view its submission
+    if (submission.task.advertiser.toString() !== req.user._id.toString()) {
+      return res.status(404).json({
+        success: false,
+        message: "Submission not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      submission,
+    });
+  } catch (error) {
+    console.error("Get buyer submission details error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch submission details",
+    });
+  }
+};
+
 module.exports = {
   createTask,
   getTasks,
@@ -456,4 +537,6 @@ module.exports = {
   acceptTask,
   submitProof,
   reviewSubmission,
+  getBuyerSubmissions,
+  getBuyerSubmissionDetails,
 };
