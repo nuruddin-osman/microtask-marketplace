@@ -1,0 +1,5 @@
+$kind: http-request
+name: Admin task active or reject korbe /admin/tasks/:id/review(active or reject)
+url: ""
+method: GET
+order: 4000

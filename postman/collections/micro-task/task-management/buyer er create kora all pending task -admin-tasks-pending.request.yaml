@@ -1,0 +1,5 @@
+$kind: http-request
+name: buyer er create kora all pending task /admin/tasks/pending
+url: ""
+method: GET
+order: 3000

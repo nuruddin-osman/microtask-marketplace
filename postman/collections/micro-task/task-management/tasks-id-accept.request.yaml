@@ -1,5 +1,0 @@
-$kind: http-request
-name: tasks/:id/accept
-url: ""
-method: GET
-order: 5000

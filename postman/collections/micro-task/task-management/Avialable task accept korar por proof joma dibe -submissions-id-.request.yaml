@@ -1,0 +1,5 @@
+$kind: http-request
+name: Avialable task accept korar por proof joma dibe /submissions/:id/proof
+url: ""
+method: GET
+order: 6000

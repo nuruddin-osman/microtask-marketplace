@@ -1,0 +1,5 @@
+$kind: http-request
+name: freelancer/buyer wallet transection check /wallet/transactions
+url: ""
+method: GET
+order: 11000

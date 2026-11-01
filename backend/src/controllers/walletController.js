@@ -40,7 +40,68 @@ const getWalletTransactions = async (req, res) => {
   }
 };
 
+const createDepositRequest = async (req, res) => {
+  try {
+    const { amount, paymentMethod, transactionReference, note } = req.body;
+
+    const depositAmount = Number(amount);
+
+    if (
+      !Number.isFinite(depositAmount) ||
+      depositAmount <= 0 ||
+      Math.round(depositAmount * 100) !== depositAmount * 100
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a valid amount with maximum 2 decimal places",
+      });
+    }
+
+    if (typeof paymentMethod !== "string" || !paymentMethod.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment method is required",
+      });
+    }
+
+    if (
+      typeof transactionReference !== "string" ||
+      !transactionReference.trim()
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Transaction reference is required",
+      });
+    }
+
+    const depositRequest = await WalletTransaction.create({
+      user: req.user._id,
+      type: "deposit",
+      amount: depositAmount,
+      status: "pending",
+      paymentMethod: paymentMethod.trim(),
+      transactionReference: transactionReference.trim(),
+      note: note || "Deposit request submitted",
+    });
+
+    return res.status(201).json({
+      success: true,
+      message:
+        "Deposit request submitted successfully. Waiting for admin approval.",
+      depositRequest,
+    });
+  } catch (error) {
+    console.error("Create deposit request error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to create deposit request",
+    });
+  }
+};
+
 module.exports = {
   getWalletBalance,
   getWalletTransactions,
+  createDepositRequest,
 };

@@ -1,0 +1,5 @@
+$kind: http-request
+name: user balance add korte parbe /wallet/deposit
+url: ""
+method: GET
+order: 1000

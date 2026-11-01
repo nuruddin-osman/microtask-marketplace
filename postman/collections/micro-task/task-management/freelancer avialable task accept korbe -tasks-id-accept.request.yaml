@@ -1,0 +1,5 @@
+$kind: http-request
+name: freelancer avialable task accept korbe /tasks/:id/accept
+url: ""
+method: GET
+order: 5000
