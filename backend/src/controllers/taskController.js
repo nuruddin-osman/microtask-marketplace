@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Task = require("../models/taskModels");
 const TaskSubmission = require("../models/taskSubmissionModels");
+const User = require("../models/userModels");
 
 const createTask = async (req, res) => {
   try {
@@ -329,6 +330,124 @@ const submitProof = async (req, res) => {
   }
 };
 
+const reviewSubmission = async (req, res) => {
+  const mongoose = require("mongoose");
+  const { id } = req.params;
+  const { status } = req.body;
+
+  if (!mongoose.isValidObjectId(id)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid submission ID",
+    });
+  }
+
+  if (!["approved", "rejected"].includes(status)) {
+    return res.status(400).json({
+      success: false,
+      message: "Status must be approved or rejected",
+    });
+  }
+
+  const session = await mongoose.startSession();
+
+  try {
+    let reviewedSubmission;
+
+    await session.withTransaction(async () => {
+      // Find submitted proof
+      const submission = await TaskSubmission.findOne({
+        _id: id,
+        status: "submitted",
+      }).session(session);
+
+      if (!submission) {
+        const error = new Error("Submission not found or already reviewed");
+        error.statusCode = 404;
+        throw error;
+      }
+
+      // Find the task
+      const task = await Task.findById(submission.task).session(session);
+
+      if (!task) {
+        const error = new Error("Task not found");
+        error.statusCode = 404;
+        throw error;
+      }
+
+      // Only the buyer who created this task can review it
+      if (task.advertiser.toString() !== req.user._id.toString()) {
+        const error = new Error(
+          "You are not authorized to review this submission",
+        );
+        error.statusCode = 403;
+        throw error;
+      }
+
+      // Update submission status
+      reviewedSubmission = await TaskSubmission.findOneAndUpdate(
+        {
+          _id: id,
+          status: "submitted",
+        },
+        {
+          $set: {
+            status,
+            reviewedAt: new Date(),
+          },
+        },
+        {
+          new: true,
+          runValidators: true,
+          session,
+        },
+      );
+
+      if (!reviewedSubmission) {
+        const error = new Error("Submission has already been reviewed");
+        error.statusCode = 409;
+        throw error;
+      }
+
+      // Credit freelancer wallet only when approved
+      if (status === "approved") {
+        const walletUpdate = await User.updateOne(
+          { _id: submission.freelancer },
+          {
+            $inc: {
+              walletBalance: task.rewardPerWorker,
+            },
+          },
+          { session },
+        );
+
+        if (walletUpdate.matchedCount !== 1) {
+          throw new Error("Freelancer account not found");
+        }
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      message:
+        status === "approved"
+          ? "Submission approved and reward credited successfully"
+          : "Submission rejected successfully",
+      submission: reviewedSubmission,
+    });
+  } catch (error) {
+    console.error("Review submission error:", error);
+
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || "Failed to review submission",
+    });
+  } finally {
+    await session.endSession();
+  }
+};
+
 module.exports = {
   createTask,
   getTasks,
@@ -336,4 +455,5 @@ module.exports = {
   reviewTask,
   acceptTask,
   submitProof,
+  reviewSubmission,
 };

@@ -1,4 +1,5 @@
 $kind: http-request
+name: submissions/:id/proof
 url: ""
 method: GET
 order: 6000

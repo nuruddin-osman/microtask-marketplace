@@ -11,6 +11,7 @@ const {
   getPendingTasks,
   acceptTask,
   submitProof,
+  reviewSubmission,
 } = require("../controllers/taskController");
 
 const router = express.Router();
@@ -61,6 +62,14 @@ router.patch(
   authorizeRoles("freelancer"),
   requireActiveMode("freelancer"),
   submitProof,
+);
+
+router.patch(
+  "/submissions/:id/review",
+  protect,
+  authorizeRoles("buyer"),
+  requireActiveMode("buyer"),
+  reviewSubmission,
 );
 
 module.exports = router;

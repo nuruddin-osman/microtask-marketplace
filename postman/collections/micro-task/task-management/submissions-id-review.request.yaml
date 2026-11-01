@@ -1,0 +1,5 @@
+$kind: http-request
+name: submissions/:id/review
+url: ""
+method: GET
+order: 7000
