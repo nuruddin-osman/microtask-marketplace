@@ -55,6 +55,13 @@ const walletTransactionSchema = new mongoose.Schema(
       trim: true,
     },
 
+    paymentAccount: {
+      type: String,
+      default: "",
+      trim: true,
+      maxlength: 100,
+    },
+
     transactionReference: {
       type: String,
       default: "",

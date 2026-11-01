@@ -1,0 +1,5 @@
+$kind: http-request
+name: admin withdraw request accept or reject /admin/wallet/withdrawals/:id/review
+url: ""
+method: GET
+order: 6000
