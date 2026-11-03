@@ -196,21 +196,28 @@ const createTask = async (req, res) => {
 const getTasks = async (req, res) => {
   try {
     const tasks = await Task.find({ status: "active" })
-      .select("-__v")
       .populate("advertiser", "name")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
-    return res.status(200).json({
+    const updatedTasks = tasks.map((task) => ({
+      ...task,
+      remainingSlots: Math.max(
+        0,
+        task.totalSlots - task.completedSlots - (task.reservedSlots || 0),
+      ),
+    }));
+
+    res.status(200).json({
       success: true,
-      count: tasks.length,
-      tasks,
+      count: updatedTasks.length,
+      tasks: updatedTasks,
     });
   } catch (error) {
-    console.error("Get tasks error:", error.message);
-
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
-      message: "Internal server error",
+      message: "Failed to fetch tasks",
+      error: error.message,
     });
   }
 };
@@ -391,30 +398,44 @@ const acceptTask = async (req, res) => {
     let submission;
 
     await session.withTransaction(async () => {
-      // Only active tasks with available slots can be accepted.
-      const task = await Task.findOneAndUpdate(
-        {
-          _id: id,
-          status: "active",
-          $expr: { $lt: ["$completedSlots", "$totalSlots"] },
-        },
-        { $inc: { completedSlots: 1 } },
-        { new: true, session },
-      );
-
-      if (!task) {
-        const error = new Error("TASK_UNAVAILABLE");
-        throw error;
-      }
-
+      // Check whether this freelancer already accepted the task.
       const existing = await TaskSubmission.findOne({
         task: id,
         freelancer: freelancerId,
       }).session(session);
 
       if (existing) {
-        const error = new Error("ALREADY_ACCEPTED");
-        throw error;
+        throw new Error("ALREADY_ACCEPTED");
+      }
+
+      // Atomically reserve one available slot.
+      const task = await Task.findOneAndUpdate(
+        {
+          _id: id,
+          status: "active",
+          $expr: {
+            $lt: [
+              {
+                $add: [
+                  { $ifNull: ["$completedSlots", 0] },
+                  { $ifNull: ["$reservedSlots", 0] },
+                ],
+              },
+              "$totalSlots",
+            ],
+          },
+        },
+        {
+          $inc: { reservedSlots: 1 },
+        },
+        {
+          returnDocument: "after",
+          session,
+        },
+      );
+
+      if (!task) {
+        throw new Error("TASK_UNAVAILABLE");
       }
 
       [submission] = await TaskSubmission.create(
@@ -455,7 +476,7 @@ const acceptTask = async (req, res) => {
       });
     }
 
-    console.error("Accept task error:", error.message);
+    console.error("Accept task error:", error);
 
     return res.status(500).json({
       success: false,
@@ -516,9 +537,8 @@ const submitProof = async (req, res) => {
 };
 
 const reviewSubmission = async (req, res) => {
-  const mongoose = require("mongoose");
   const { id } = req.params;
-  const { status } = req.body;
+  const { status } = req.body || {};
 
   if (!mongoose.isValidObjectId(id)) {
     return res.status(400).json({
@@ -540,7 +560,7 @@ const reviewSubmission = async (req, res) => {
     let reviewedSubmission;
 
     await session.withTransaction(async () => {
-      // Find submitted proof
+      // 1. Find submitted proof
       const submission = await TaskSubmission.findOne({
         _id: id,
         status: "submitted",
@@ -552,7 +572,7 @@ const reviewSubmission = async (req, res) => {
         throw error;
       }
 
-      // Find the task
+      // 2. Find related task
       const task = await Task.findById(submission.task).session(session);
 
       if (!task) {
@@ -561,7 +581,7 @@ const reviewSubmission = async (req, res) => {
         throw error;
       }
 
-      // Only the buyer who created this task can review it
+      // 3. Only task owner can review
       if (task.advertiser.toString() !== req.user._id.toString()) {
         const error = new Error(
           "You are not authorized to review this submission",
@@ -570,7 +590,79 @@ const reviewSubmission = async (req, res) => {
         throw error;
       }
 
-      // Update submission status
+      // 4. Verify reserved slot exists
+      if ((task.reservedSlots || 0) < 1) {
+        const error = new Error("No reserved slot found for this submission");
+        error.statusCode = 409;
+        throw error;
+      }
+
+      // 5. Calculate task slot updates
+      const updateFields = {
+        reservedSlots: -1,
+      };
+
+      let nextCompletedSlots = task.completedSlots;
+
+      if (status === "approved") {
+        const reward = Number(task.rewardPerWorker);
+        const totalRewardBudget = Number(task.totalRewardBudget);
+
+        if (
+          !Number.isFinite(reward) ||
+          reward <= 0 ||
+          !Number.isFinite(totalRewardBudget) ||
+          totalRewardBudget < reward
+        ) {
+          throw new Error("Invalid task reward or budget");
+        }
+
+        // Check remaining escrow reward budget
+        const remainingBudget = Number(
+          (totalRewardBudget - task.completedSlots * reward).toFixed(2),
+        );
+
+        if (remainingBudget < reward) {
+          throw new Error("Insufficient remaining task budget");
+        }
+
+        nextCompletedSlots += 1;
+
+        updateFields.completedSlots = 1;
+      }
+
+      // 6. Atomically update task slots
+      const taskUpdate = {
+        $inc: updateFields,
+      };
+
+      if (status === "approved" && nextCompletedSlots >= task.totalSlots) {
+        taskUpdate.$set = {
+          status: "completed",
+        };
+      }
+
+      const updatedTask = await Task.findOneAndUpdate(
+        {
+          _id: task._id,
+          reservedSlots: { $gt: 0 },
+          completedSlots: task.completedSlots,
+        },
+        taskUpdate,
+        {
+          returnDocument: "after",
+          runValidators: true,
+          session,
+        },
+      );
+
+      if (!updatedTask) {
+        const error = new Error("Task slot update failed. Please try again");
+        error.statusCode = 409;
+        throw error;
+      }
+
+      // 7. Approve or reject submission
       reviewedSubmission = await TaskSubmission.findOneAndUpdate(
         {
           _id: id,
@@ -583,7 +675,7 @@ const reviewSubmission = async (req, res) => {
           },
         },
         {
-          new: true,
+          returnDocument: "after",
           runValidators: true,
           session,
         },
@@ -595,15 +687,9 @@ const reviewSubmission = async (req, res) => {
         throw error;
       }
 
-      // Credit freelancer wallet only when approved
+      // 8. Release reward from task escrow on approval
       if (status === "approved") {
-        const freelancer = await User.findById(submission.freelancer).session(
-          session,
-        );
-
-        if (!freelancer) {
-          throw new Error("Freelancer not found");
-        }
+        const reward = Number(task.rewardPerWorker);
 
         // Prevent duplicate reward
         const existingTransaction = await WalletTransaction.findOne({
@@ -615,32 +701,35 @@ const reviewSubmission = async (req, res) => {
           throw new Error("Reward already credited for this submission");
         }
 
-        const balanceBefore = freelancer.walletBalance;
+        // Atomically credit freelancer wallet
+        const updatedFreelancer = await User.findOneAndUpdate(
+          {
+            _id: submission.freelancer,
+          },
+          {
+            $inc: {
+              walletBalance: reward,
+            },
+          },
+          {
+            returnDocument: "after",
+            session,
+          },
+        );
 
-        if (!Number.isFinite(balanceBefore) || balanceBefore < 0) {
-          throw new Error("Invalid freelancer wallet balance");
+        if (!updatedFreelancer) {
+          throw new Error("Freelancer not found");
         }
 
-        const reward = Number(task.rewardPerWorker);
+        const balanceAfter = Number(updatedFreelancer.walletBalance);
 
-        if (!Number.isFinite(reward) || reward <= 0) {
-          throw new Error("Invalid task reward amount");
-        }
+        const balanceBefore = Number((balanceAfter - reward).toFixed(2));
 
-        const balanceAfter = Number((balanceBefore + reward).toFixed(2));
-
-        if (!Number.isFinite(balanceAfter)) {
-          throw new Error("Invalid wallet balance calculation");
-        }
-
-        freelancer.walletBalance = balanceAfter;
-
-        await freelancer.save({ session });
-
+        // Record reward transaction
         await WalletTransaction.create(
           [
             {
-              user: freelancer._id,
+              user: updatedFreelancer._id,
               type: "task_reward",
               amount: reward,
               status: "completed",
@@ -648,7 +737,7 @@ const reviewSubmission = async (req, res) => {
               balanceAfter,
               relatedTask: task._id,
               relatedSubmission: submission._id,
-              note: "Task reward credited",
+              note: "Task reward released from escrow",
               processedBy: req.user._id,
             },
           ],
@@ -661,8 +750,8 @@ const reviewSubmission = async (req, res) => {
       success: true,
       message:
         status === "approved"
-          ? "Submission approved and reward credited successfully"
-          : "Submission rejected successfully",
+          ? "Submission approved and reward released successfully"
+          : "Submission rejected and reserved slot released successfully",
       submission: reviewedSubmission,
     });
   } catch (error) {
@@ -690,14 +779,34 @@ const getBuyerSubmissions = async (req, res) => {
     const submissions = await TaskSubmission.find({
       task: { $in: taskIds },
     })
-      .populate("task", "title category rewardPerWorker")
-      .populate("freelancer", "name email")
+      .populate({
+        path: "task",
+        select:
+          "title category rewardPerWorker totalSlots reservedSlots completedSlots status",
+      })
+      .populate("freelancer", "name username")
       .sort({ createdAt: -1 });
+
+    // Add remainingSlots to each submission's task
+    const formattedSubmissions = submissions.map((submission) => {
+      const submissionObject = submission.toObject();
+
+      if (submissionObject.task) {
+        const task = submissionObject.task;
+
+        submissionObject.task.remainingSlots =
+          task.totalSlots -
+          (task.completedSlots || 0) -
+          (task.reservedSlots || 0);
+      }
+
+      return submissionObject;
+    });
 
     return res.status(200).json({
       success: true,
-      count: submissions.length,
-      submissions,
+      count: formattedSubmissions.length,
+      submissions: formattedSubmissions,
     });
   } catch (error) {
     console.error("Get buyer submissions error:", error);
@@ -713,21 +822,20 @@ const getBuyerSubmissionDetails = async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!require("mongoose").isValidObjectId(id)) {
+    if (!mongoose.isValidObjectId(id)) {
       return res.status(400).json({
         success: false,
         message: "Invalid submission ID",
       });
     }
 
-    // Find submission and populate related information
     const submission = await TaskSubmission.findById(id)
       .populate({
         path: "task",
         select:
-          "title description instructions category rewardPerWorker totalSlots status advertiser",
+          "title description instructions category rewardPerWorker totalSlots reservedSlots completedSlots status advertiser",
       })
-      .populate("freelancer", "name email");
+      .populate("freelancer", "name username");
 
     if (!submission || !submission.task) {
       return res.status(404).json({
@@ -744,9 +852,15 @@ const getBuyerSubmissionDetails = async (req, res) => {
       });
     }
 
+    const task = submission.task;
+
+    const remainingSlots =
+      task.totalSlots - (task.completedSlots || 0) - (task.reservedSlots || 0);
+
     return res.status(200).json({
       success: true,
       submission,
+      remainingSlots,
     });
   } catch (error) {
     console.error("Get buyer submission details error:", error);

@@ -46,10 +46,24 @@ const taskSchema = new mongoose.Schema(
       },
     },
 
+    reservedSlots: {
+      type: Number,
+      default: 0,
+      min: 0,
+      validate: {
+        validator: Number.isInteger,
+        message: "Reserved slots must be an integer",
+      },
+    },
+
     completedSlots: {
       type: Number,
       default: 0,
       min: 0,
+      validate: {
+        validator: Number.isInteger,
+        message: "Completed slots must be an integer",
+      },
     },
 
     advertiser: {
