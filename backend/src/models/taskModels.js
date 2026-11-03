@@ -65,6 +65,24 @@ const taskSchema = new mongoose.Schema(
       default: "pending",
       index: true,
     },
+
+    totalRewardBudget: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+
+    platformFee: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+
+    totalCost: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
   },
   {
     timestamps: true,

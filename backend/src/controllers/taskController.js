@@ -5,6 +5,8 @@ const User = require("../models/userModels");
 const WalletTransaction = require("../models/walletTransactionModels");
 
 const createTask = async (req, res) => {
+  const session = await mongoose.startSession();
+
   try {
     const {
       title,
@@ -15,7 +17,7 @@ const createTask = async (req, res) => {
       totalSlots,
     } = req.body || {};
 
-    // Validate required text fields
+    // Validate text fields
     const textFields = {
       title,
       description,
@@ -32,6 +34,7 @@ const createTask = async (req, res) => {
       }
     }
 
+    // Validate numeric fields
     if (
       rewardPerWorker === undefined ||
       rewardPerWorker === null ||
@@ -53,10 +56,14 @@ const createTask = async (req, res) => {
     const reward = Number(rewardPerWorker);
     const slots = Number(totalSlots);
 
-    if (!Number.isFinite(reward) || reward < 0.01) {
+    if (
+      !Number.isFinite(reward) ||
+      reward < 0.01 ||
+      Math.abs(reward * 100 - Math.round(reward * 100)) > 1e-8
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Reward per worker must be at least 0.01",
+        message: "Reward must be at least 0.01 with maximum 2 decimal places",
       });
     }
 
@@ -67,24 +74,108 @@ const createTask = async (req, res) => {
       });
     }
 
-    const task = await Task.create({
-      title: title.trim(),
-      description: description.trim(),
-      instructions: instructions.trim(),
-      category: category.trim(),
-      rewardPerWorker: reward,
-      totalSlots: slots,
-      advertiser: req.user._id,
-      status: "pending",
+    // Calculate money in cents to reduce floating-point errors
+    const rewardCents = Math.round(reward * 100);
+    const budgetCents = rewardCents * slots;
+
+    if (!Number.isSafeInteger(budgetCents)) {
+      return res.status(400).json({
+        success: false,
+        message: "Task budget is too large",
+      });
+    }
+
+    const feeCents = Math.round(budgetCents * 0.05);
+    const totalCostCents = budgetCents + feeCents;
+
+    const totalRewardBudget = budgetCents / 100;
+    const platformFee = feeCents / 100;
+    const totalCost = totalCostCents / 100;
+
+    let createdTask;
+
+    await session.withTransaction(async () => {
+      // Atomically deduct the total cost from buyer's wallet
+      const updatedBuyer = await User.findOneAndUpdate(
+        {
+          _id: req.user._id,
+          walletBalance: { $gte: totalCost },
+        },
+        {
+          $inc: { walletBalance: -totalCost },
+        },
+        {
+          returnDocument: "after",
+          session,
+        },
+      );
+
+      if (!updatedBuyer) {
+        const error = new Error("INSUFFICIENT_BALANCE");
+        throw error;
+      }
+
+      const balanceAfter = Number(updatedBuyer.walletBalance);
+      const balanceBefore = Number((balanceAfter + totalCost).toFixed(2));
+
+      // Create task
+      [createdTask] = await Task.create(
+        [
+          {
+            title: title.trim(),
+            description: description.trim(),
+            instructions: instructions.trim(),
+            category: category.trim(),
+            rewardPerWorker: reward,
+            totalSlots: slots,
+            completedSlots: 0,
+            advertiser: req.user._id,
+            status: "pending",
+            totalRewardBudget,
+            platformFee,
+            totalCost,
+          },
+        ],
+        { session },
+      );
+
+      // Record reserved task budget
+      await WalletTransaction.create(
+        [
+          {
+            user: req.user._id,
+            type: "task_budget",
+            amount: totalCost,
+            status: "completed",
+            balanceBefore,
+            balanceAfter,
+            relatedTask: createdTask._id,
+            note: `Task budget reserved. Reward: ${totalRewardBudget}, Platform fee: ${platformFee}`,
+          },
+        ],
+        { session },
+      );
     });
 
     return res.status(201).json({
       success: true,
       message: "Task created and submitted for approval",
-      task,
+      task: createdTask,
+      payment: {
+        totalRewardBudget,
+        platformFee,
+        totalCost,
+      },
     });
   } catch (error) {
-    console.error("Create task error:", error.message);
+    console.error("Create task error:", error);
+
+    if (error.message === "INSUFFICIENT_BALANCE") {
+      return res.status(400).json({
+        success: false,
+        message: "Insufficient wallet balance to create this task",
+      });
+    }
 
     if (error.name === "ValidationError") {
       return res.status(400).json({
@@ -95,8 +186,10 @@ const createTask = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Internal server error",
+      message: "Failed to create task",
     });
+  } finally {
+    await session.endSession();
   }
 };
 
@@ -144,49 +237,140 @@ const getPendingTasks = async (req, res) => {
 };
 
 const reviewTask = async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body || {};
+
+  if (!mongoose.isValidObjectId(id)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid task ID",
+    });
+  }
+
+  if (!["active", "rejected"].includes(status)) {
+    return res.status(400).json({
+      success: false,
+      message: "Status must be active or rejected",
+    });
+  }
+
+  const session = await mongoose.startSession();
+
   try {
-    const { status } = req.body || {};
-    const { id } = req.params;
+    let reviewedTask;
 
-    if (!["active", "rejected"].includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message: "Status must be active or rejected",
-      });
-    }
+    await session.withTransaction(async () => {
+      const task = await Task.findOne({
+        _id: id,
+        status: "pending",
+      }).session(session);
 
-    if (!require("mongoose").isValidObjectId(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid task ID",
-      });
-    }
+      if (!task) {
+        const error = new Error("Pending task not found");
+        error.statusCode = 404;
+        throw error;
+      }
 
-    const task = await Task.findOneAndUpdate(
-      { _id: id, status: "pending" },
-      { $set: { status } },
-      { new: true, runValidators: true },
-    );
+      // If admin rejects the task, refund buyer
+      if (status === "rejected") {
+        const budgetTransaction = await WalletTransaction.findOne({
+          relatedTask: task._id,
+          type: "task_budget",
+          status: "completed",
+        }).session(session);
 
-    if (!task) {
-      return res.status(404).json({
-        success: false,
-        message: "Pending task not found",
-      });
-    }
+        if (!budgetTransaction) {
+          throw new Error("Task budget transaction not found");
+        }
+
+        // Prevent duplicate refund
+        const existingRefund = await WalletTransaction.findOne({
+          relatedTask: task._id,
+          type: "task_refund",
+        }).session(session);
+
+        if (existingRefund) {
+          throw new Error("Task budget has already been refunded");
+        }
+
+        const buyer = await User.findById(task.advertiser).session(session);
+
+        if (!buyer) {
+          throw new Error("Buyer not found");
+        }
+
+        const refundAmount = Number(task.totalCost);
+        const balanceBefore = Number(buyer.walletBalance);
+
+        if (
+          !Number.isFinite(refundAmount) ||
+          refundAmount <= 0 ||
+          !Number.isFinite(balanceBefore) ||
+          balanceBefore < 0
+        ) {
+          throw new Error("Invalid refund calculation");
+        }
+
+        const balanceAfter = Number((balanceBefore + refundAmount).toFixed(2));
+
+        buyer.walletBalance = balanceAfter;
+        await buyer.save({ session });
+
+        await WalletTransaction.create(
+          [
+            {
+              user: buyer._id,
+              type: "task_refund",
+              amount: refundAmount,
+              status: "completed",
+              balanceBefore,
+              balanceAfter,
+              relatedTask: task._id,
+              processedBy: req.user._id,
+              note: "Task rejected; full budget and platform fee refunded",
+            },
+          ],
+          { session },
+        );
+      }
+
+      reviewedTask = await Task.findOneAndUpdate(
+        {
+          _id: id,
+          status: "pending",
+        },
+        {
+          $set: { status },
+        },
+        {
+          returnDocument: "after",
+          runValidators: true,
+          session,
+        },
+      );
+
+      if (!reviewedTask) {
+        throw new Error("Task review failed");
+      }
+    });
 
     return res.status(200).json({
       success: true,
-      message: `Task ${status === "active" ? "approved" : "rejected"} successfully`,
-      task,
+      message:
+        status === "active"
+          ? "Task approved successfully"
+          : "Task rejected and full amount refunded successfully",
+      task: reviewedTask,
     });
   } catch (error) {
-    console.error("Review task error:", error.message);
+    console.error("Review task error:", error);
 
-    return res.status(500).json({
+    return res.status(error.statusCode || 500).json({
       success: false,
-      message: "Internal server error",
+      message: error.message || "Failed to review task",
     });
+  } finally {
+    await session.endSession();
   }
 };
 

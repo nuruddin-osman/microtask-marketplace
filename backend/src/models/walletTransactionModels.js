@@ -11,7 +11,13 @@ const walletTransactionSchema = new mongoose.Schema(
 
     type: {
       type: String,
-      enum: ["deposit", "task_reward", "withdrawal"],
+      enum: [
+        "deposit",
+        "task_reward",
+        "withdrawal",
+        "task_budget",
+        "task_refund",
+      ],
       required: true,
     },
 
@@ -79,6 +85,18 @@ const walletTransactionSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       default: null,
+    },
+
+    feeAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    netAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
   },
   { timestamps: true },

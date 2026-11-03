@@ -5,12 +5,12 @@ const User = require("../models/userModels");
 
 const registerUser = async (req, res) => {
   try {
-    const { name, email, password } = req.body || {};
+    const { name, username, email, password } = req.body || {};
 
-    if (!name || !email || !password) {
+    if (!name || !email || !password || !username) {
       return res.status(400).json({
         success: false,
-        message: "Name, email and password are required",
+        message: "Name, username, email and password are required",
       });
     }
 
@@ -21,25 +21,27 @@ const registerUser = async (req, res) => {
       });
     }
 
+    const normalizedUsername = username.trim().toLowerCase();
     const normalizedEmail = email.trim().toLowerCase();
 
     const existingUser = await User.findOne({
-      email: normalizedEmail,
+      $or: [{ email: normalizedEmail }, { username: normalizedUsername }],
     });
 
     if (existingUser) {
       return res.status(409).json({
         success: false,
-        message: "Email already registered",
+        message: "Username or Email already taken",
       });
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
     // Public registration always creates a freelancer account.
-    // Never accept roles or activeMode from the request body.
+
     const user = await User.create({
       name: name.trim(),
+      username: normalizedUsername,
       email: normalizedEmail,
       password: hashedPassword,
       roles: ["freelancer", "buyer"],
@@ -52,6 +54,7 @@ const registerUser = async (req, res) => {
       user: {
         id: user._id,
         name: user.name,
+        username: user.username,
         email: user.email,
         roles: user.roles,
         activeMode: user.activeMode,
@@ -84,17 +87,27 @@ const registerUser = async (req, res) => {
 
 const loginUser = async (req, res) => {
   try {
-    const { email, password } = req.body || {};
+    const { identifier, password } = req.body || {};
 
-    if (!email || !password || typeof email !== "string") {
+    if (
+      typeof identifier !== "string" ||
+      !identifier.trim() ||
+      typeof password !== "string" ||
+      !password
+    ) {
       return res.status(400).json({
         success: false,
         message: "Email and password are required",
       });
     }
 
+    const normalizedIdentifier = identifier.trim().toLowerCase();
+
     const user = await User.findOne({
-      email: email.trim().toLowerCase(),
+      $or: [
+        { email: normalizedIdentifier },
+        { username: normalizedIdentifier },
+      ],
     }).select("+password");
 
     if (!user || !(await bcrypt.compare(password, user.password))) {
@@ -147,6 +160,7 @@ const loginUser = async (req, res) => {
       user: {
         id: user._id,
         name: user.name,
+        username: user.username,
         email: user.email,
         roles: user.roles,
         activeMode: user.activeMode,
