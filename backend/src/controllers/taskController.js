@@ -558,6 +558,7 @@ const reviewSubmission = async (req, res) => {
 
   try {
     let reviewedSubmission;
+    let reviewedTask;
 
     await session.withTransaction(async () => {
       // 1. Find submitted proof
@@ -642,7 +643,7 @@ const reviewSubmission = async (req, res) => {
         };
       }
 
-      const updatedTask = await Task.findOneAndUpdate(
+      reviewedTask = await Task.findOneAndUpdate(
         {
           _id: task._id,
           reservedSlots: { $gt: 0 },
@@ -656,7 +657,7 @@ const reviewSubmission = async (req, res) => {
         },
       );
 
-      if (!updatedTask) {
+      if (!reviewedTask) {
         const error = new Error("Task slot update failed. Please try again");
         error.statusCode = 409;
         throw error;
@@ -746,13 +747,29 @@ const reviewSubmission = async (req, res) => {
       }
     });
 
+    const remainingSlots =
+      reviewedTask.totalSlots -
+      reviewedTask.completedSlots -
+      reviewedTask.reservedSlots;
+
     return res.status(200).json({
       success: true,
       message:
         status === "approved"
           ? "Submission approved and reward released successfully"
           : "Submission rejected and reserved slot released successfully",
+
       submission: reviewedSubmission,
+
+      task: {
+        _id: reviewedTask._id,
+        title: reviewedTask.title,
+        totalSlots: reviewedTask.totalSlots,
+        reservedSlots: reviewedTask.reservedSlots,
+        completedSlots: reviewedTask.completedSlots,
+        remainingSlots,
+        status: reviewedTask.status,
+      },
     });
   } catch (error) {
     console.error("Review submission error:", error);
