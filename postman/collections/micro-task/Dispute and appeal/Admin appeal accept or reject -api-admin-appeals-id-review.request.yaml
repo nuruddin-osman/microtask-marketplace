@@ -1,0 +1,5 @@
+$kind: http-request
+name: Admin appeal accept or reject /api/admin/appeals/id/review
+url: ""
+method: GET
+order: 3000

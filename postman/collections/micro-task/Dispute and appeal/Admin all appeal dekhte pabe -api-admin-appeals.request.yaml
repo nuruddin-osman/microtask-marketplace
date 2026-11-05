@@ -1,0 +1,5 @@
+$kind: http-request
+name: Admin all appeal dekhte pabe /api/admin/appeals
+url: ""
+method: GET
+order: 2000

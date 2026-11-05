@@ -13,7 +13,6 @@ const disputeSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "TaskSubmission",
       required: true,
-      index: true,
     },
 
     openedBy: {
@@ -28,21 +27,17 @@ const disputeSchema = new mongoose.Schema(
       required: true,
     },
 
+    // Only Freelancer can open an appeal.
     openedByRole: {
       type: String,
-      enum: ["buyer", "freelancer"],
+      enum: ["freelancer"],
+      default: "freelancer",
       required: true,
     },
 
     reason: {
       type: String,
-      enum: [
-        "fake_proof",
-        "wrong_rejection",
-        "incomplete_task",
-        "fraud",
-        "other",
-      ],
+      enum: ["wrong_rejection", "incomplete_task", "other"],
       required: true,
     },
 
@@ -53,25 +48,21 @@ const disputeSchema = new mongoose.Schema(
       maxlength: 3000,
     },
 
-    // Private evidence storage references.
-    // These are storage keys, NOT public file URLs.
+    // Private storage references; file upload is not implemented yet.
     evidence: [
       {
         storageKey: {
           type: String,
           required: true,
         },
-
         originalName: {
           type: String,
           required: true,
         },
-
         mimeType: {
           type: String,
           required: true,
         },
-
         size: {
           type: Number,
           required: true,
@@ -114,15 +105,11 @@ const disputeSchema = new mongoose.Schema(
   },
 );
 
-disputeSchema.index({
-  submission: 1,
-  status: 1,
-});
+// One appeal per submission, including resolved appeals.
+disputeSchema.index({ submission: 1 }, { unique: true });
 
-disputeSchema.index({
-  openedBy: 1,
-  createdAt: -1,
-});
+disputeSchema.index({ status: 1, createdAt: -1 });
+disputeSchema.index({ openedBy: 1, createdAt: -1 });
 
 const Dispute = mongoose.model("Dispute", disputeSchema);
 

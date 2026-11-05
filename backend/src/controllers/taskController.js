@@ -599,11 +599,7 @@ const reviewSubmission = async (req, res) => {
       }
 
       // 5. Calculate task slot updates
-      const updateFields = {
-        reservedSlots: -1,
-      };
-
-      let nextCompletedSlots = task.completedSlots;
+      let nextCompletedSlots = task.completedSlots || 0;
 
       if (status === "approved") {
         const reward = Number(task.rewardPerWorker);
@@ -618,9 +614,9 @@ const reviewSubmission = async (req, res) => {
           throw new Error("Invalid task reward or budget");
         }
 
-        // Check remaining escrow reward budget
+        // Check remaining task budget
         const remainingBudget = Number(
-          (totalRewardBudget - task.completedSlots * reward).toFixed(2),
+          (totalRewardBudget - (task.completedSlots || 0) * reward).toFixed(2),
         );
 
         if (remainingBudget < reward) {
@@ -629,38 +625,42 @@ const reviewSubmission = async (req, res) => {
 
         nextCompletedSlots += 1;
 
-        updateFields.completedSlots = 1;
-      }
-
-      // 6. Atomically update task slots
-      const taskUpdate = {
-        $inc: updateFields,
-      };
-
-      if (status === "approved" && nextCompletedSlots >= task.totalSlots) {
-        taskUpdate.$set = {
-          status: "completed",
+        // 6. Approved: reserved slot becomes completed
+        const taskUpdate = {
+          $inc: {
+            reservedSlots: -1,
+            completedSlots: 1,
+          },
         };
-      }
 
-      reviewedTask = await Task.findOneAndUpdate(
-        {
-          _id: task._id,
-          reservedSlots: { $gt: 0 },
-          completedSlots: task.completedSlots,
-        },
-        taskUpdate,
-        {
-          returnDocument: "after",
-          runValidators: true,
-          session,
-        },
-      );
+        if (nextCompletedSlots >= task.totalSlots) {
+          taskUpdate.$set = {
+            status: "completed",
+          };
+        }
 
-      if (!reviewedTask) {
-        const error = new Error("Task slot update failed. Please try again");
-        error.statusCode = 409;
-        throw error;
+        reviewedTask = await Task.findOneAndUpdate(
+          {
+            _id: task._id,
+            reservedSlots: { $gt: 0 },
+            completedSlots: task.completedSlots || 0,
+          },
+          taskUpdate,
+          {
+            returnDocument: "after",
+            runValidators: true,
+            session,
+          },
+        );
+
+        if (!reviewedTask) {
+          const error = new Error("Task slot update failed. Please try again");
+          error.statusCode = 409;
+          throw error;
+        }
+      } else {
+        // Rejected: keep the slot reserved for a possible appeal.
+        reviewedTask = task;
       }
 
       // 7. Approve or reject submission
@@ -757,7 +757,7 @@ const reviewSubmission = async (req, res) => {
       message:
         status === "approved"
           ? "Submission approved and reward released successfully"
-          : "Submission rejected and reserved slot released successfully",
+          : "Submission rejected. Slot reserved for possible appeal",
 
       submission: reviewedSubmission,
 
