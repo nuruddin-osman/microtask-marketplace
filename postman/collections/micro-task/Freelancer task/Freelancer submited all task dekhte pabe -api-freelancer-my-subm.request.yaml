@@ -1,0 +1,5 @@
+$kind: http-request
+name: Freelancer submited all task dekhte pabe /api/freelancer/my-submissions
+url: ""
+method: GET
+order: 2000

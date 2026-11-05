@@ -1,0 +1,5 @@
+$kind: http-request
+name: Freelancer (only one) submited all task /api/freelancer/tasks
+url: ""
+method: GET
+order: 1000

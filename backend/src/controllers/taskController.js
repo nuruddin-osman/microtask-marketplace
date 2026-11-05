@@ -196,7 +196,7 @@ const createTask = async (req, res) => {
 const getTasks = async (req, res) => {
   try {
     const tasks = await Task.find({ status: "active" })
-      .populate("advertiser", "name")
+      .populate("advertiser", "name username")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -889,6 +889,181 @@ const getBuyerSubmissionDetails = async (req, res) => {
   }
 };
 
+// ==========================================
+// FREELANCER: GET ALL ACTIVE TASKS
+// ==========================================
+const getFreelancerTasks = async (req, res) => {
+  try {
+    // Get all active tasks
+    const tasks = await Task.find({ status: "active" })
+      .populate("advertiser", "name username")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (!tasks.length) {
+      return res.status(200).json({
+        success: true,
+        count: 0,
+        tasks: [],
+      });
+    }
+
+    const taskIds = tasks.map((task) => task._id);
+
+    // Find this freelancer's submissions for these tasks
+    const submissions = await TaskSubmission.find({
+      freelancer: req.user._id,
+      task: { $in: taskIds },
+    })
+      .select("_id task status createdAt updatedAt reviewedAt")
+      .lean();
+
+    // Map submissions by task ID
+    const submissionMap = new Map();
+
+    submissions.forEach((submission) => {
+      submissionMap.set(submission.task.toString(), {
+        _id: submission._id,
+        status: submission.status,
+        createdAt: submission.createdAt,
+        updatedAt: submission.updatedAt,
+        reviewedAt: submission.reviewedAt,
+      });
+    });
+
+    // Add remainingSlots and mySubmission to each task
+    const formattedTasks = tasks.map((task) => ({
+      ...task,
+      remainingSlots: Math.max(
+        0,
+        task.totalSlots -
+          (task.completedSlots || 0) -
+          (task.reservedSlots || 0),
+      ),
+      mySubmission: submissionMap.get(task._id.toString()) || null,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      count: formattedTasks.length,
+      tasks: formattedTasks,
+    });
+  } catch (error) {
+    console.error("Get freelancer tasks error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch freelancer tasks",
+    });
+  }
+};
+
+// ==========================================
+// FREELANCER: GET MY ALL SUBMISSIONS
+// ==========================================
+const getMySubmissions = async (req, res) => {
+  try {
+    const submissions = await TaskSubmission.find({
+      freelancer: req.user._id,
+    })
+      .populate({
+        path: "task",
+        select:
+          "title description category rewardPerWorker totalSlots reservedSlots completedSlots status advertiser",
+        populate: {
+          path: "advertiser",
+          select: "name username",
+        },
+      })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const formattedSubmissions = submissions.map((submission) => {
+      if (submission.task) {
+        submission.task.remainingSlots = Math.max(
+          0,
+          submission.task.totalSlots -
+            (submission.task.completedSlots || 0) -
+            (submission.task.reservedSlots || 0),
+        );
+      }
+
+      return submission;
+    });
+
+    return res.status(200).json({
+      success: true,
+      count: formattedSubmissions.length,
+      submissions: formattedSubmissions,
+    });
+  } catch (error) {
+    console.error("Get freelancer submissions error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch your submissions",
+    });
+  }
+};
+
+// ==========================================
+// FREELANCER: GET MY SINGLE SUBMISSION DETAILS
+// ==========================================
+const getMySubmissionDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid submission ID",
+      });
+    }
+
+    // A freelancer can only access their own submission
+    const submission = await TaskSubmission.findOne({
+      _id: id,
+      freelancer: req.user._id,
+    })
+      .populate({
+        path: "task",
+        select:
+          "title description instructions category rewardPerWorker totalSlots reservedSlots completedSlots status advertiser",
+        populate: {
+          path: "advertiser",
+          select: "name username",
+        },
+      })
+      .lean();
+
+    if (!submission || !submission.task) {
+      return res.status(404).json({
+        success: false,
+        message: "Submission not found",
+      });
+    }
+
+    const task = submission.task;
+
+    task.remainingSlots = Math.max(
+      0,
+      task.totalSlots - (task.completedSlots || 0) - (task.reservedSlots || 0),
+    );
+
+    return res.status(200).json({
+      success: true,
+      submission,
+    });
+  } catch (error) {
+    console.error("Get freelancer submission details error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch submission details",
+    });
+  }
+};
+
 module.exports = {
   createTask,
   getTasks,
@@ -899,4 +1074,8 @@ module.exports = {
   reviewSubmission,
   getBuyerSubmissions,
   getBuyerSubmissionDetails,
+  // Freelancer APIs
+  getFreelancerTasks,
+  getMySubmissions,
+  getMySubmissionDetails,
 };

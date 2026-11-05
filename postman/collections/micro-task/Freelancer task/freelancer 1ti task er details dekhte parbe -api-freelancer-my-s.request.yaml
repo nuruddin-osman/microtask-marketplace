@@ -1,0 +1,5 @@
+$kind: http-request
+name: freelancer 1ti task er details dekhte parbe /api/freelancer/my-submissions/id
+url: ""
+method: GET
+order: 3000
