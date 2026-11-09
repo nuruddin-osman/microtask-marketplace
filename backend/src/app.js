@@ -10,6 +10,7 @@ const walletRoutes = require("./routes/walletRoutes");
 const withdrawRoutes = require("./routes/withdrawRoutes");
 const disputeRoutes = require("./routes/disputeRoutes");
 const freelancerRoutes = require("./routes/freelancerRoutes");
+const adminRoutes = require("./routes/adminRoutes");
 
 app.use("/api", authRoutes);
 app.use("/api", taskRoutes);
@@ -17,5 +18,6 @@ app.use("/api", walletRoutes);
 app.use("/api", withdrawRoutes);
 app.use("/api", disputeRoutes);
 app.use("/api", freelancerRoutes);
+app.use("/api", adminRoutes);
 
 module.exports = app;
