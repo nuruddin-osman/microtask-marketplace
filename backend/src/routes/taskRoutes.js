@@ -14,6 +14,9 @@ const {
   reviewSubmission,
   getBuyerSubmissions,
   getBuyerSubmissionDetails,
+  getBuyerTasks,
+  getBuyerTaskDetails,
+  cancelBuyerTask,
 } = require("../controllers/taskController");
 
 const router = express.Router();
@@ -88,6 +91,30 @@ router.get(
   authorizeRoles("buyer"),
   requireActiveMode("buyer"),
   getBuyerSubmissionDetails,
+);
+
+router.get(
+  "/buyer/tasks",
+  protect,
+  authorizeRoles("buyer"),
+  requireActiveMode("buyer"),
+  getBuyerTasks,
+);
+
+router.get(
+  "/buyer/tasks/:id",
+  protect,
+  authorizeRoles("buyer"),
+  requireActiveMode("buyer"),
+  getBuyerTaskDetails,
+);
+
+router.patch(
+  "/buyer/tasks/:id/cancel",
+  protect,
+  authorizeRoles("buyer"),
+  requireActiveMode("buyer"),
+  cancelBuyerTask,
 );
 
 module.exports = router;

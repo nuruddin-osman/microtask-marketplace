@@ -1064,6 +1064,269 @@ const getMySubmissionDetails = async (req, res) => {
   }
 };
 
+// ==========================================
+// BUYER: GET MY TASKS
+// ==========================================
+const getBuyerTasks = async (req, res) => {
+  try {
+    const { status } = req.query;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(
+      50,
+      Math.max(1, parseInt(req.query.limit, 10) || 10),
+    );
+
+    const filter = { advertiser: req.user._id };
+
+    if (status) {
+      if (
+        ![
+          "pending",
+          "active",
+          "paused",
+          "completed",
+          "rejected",
+          "cancelled",
+        ].includes(status)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid status filter",
+        });
+      }
+      filter.status = status;
+    }
+
+    const [tasks, total] = await Promise.all([
+      Task.find(filter)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      Task.countDocuments(filter),
+    ]);
+
+    const formattedTasks = tasks.map((task) => ({
+      ...task,
+      remainingSlots: Math.max(
+        0,
+        task.totalSlots -
+          (task.completedSlots || 0) -
+          (task.reservedSlots || 0),
+      ),
+    }));
+
+    return res.status(200).json({
+      success: true,
+      count: formattedTasks.length,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      tasks: formattedTasks,
+    });
+  } catch (error) {
+    console.error("Get buyer tasks error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch your tasks",
+    });
+  }
+};
+
+// ==========================================
+// BUYER: GET MY SINGLE TASK DETAILS
+// ==========================================
+const getBuyerTaskDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid task ID",
+      });
+    }
+
+    const task = await Task.findOne({
+      _id: id,
+      advertiser: req.user._id,
+    }).lean();
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: "Task not found",
+      });
+    }
+
+    // Count submissions by status
+    const stats = await TaskSubmission.aggregate([
+      { $match: { task: new mongoose.Types.ObjectId(id) } },
+      { $group: { _id: "$status", count: { $sum: 1 } } },
+    ]);
+
+    const submissionStats = {
+      accepted: 0,
+      submitted: 0,
+      approved: 0,
+      rejected: 0,
+    };
+
+    stats.forEach((item) => {
+      submissionStats[item._id] = item.count;
+    });
+
+    task.remainingSlots = Math.max(
+      0,
+      task.totalSlots - (task.completedSlots || 0) - (task.reservedSlots || 0),
+    );
+
+    return res.status(200).json({
+      success: true,
+      task,
+      submissionStats,
+    });
+  } catch (error) {
+    console.error("Get buyer task details error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch task details",
+    });
+  }
+};
+
+// ==========================================
+// BUYER: CANCEL TASK + REFUND UNUSED BUDGET
+// ==========================================
+const cancelBuyerTask = async (req, res) => {
+  const { id } = req.params;
+
+  if (!mongoose.isValidObjectId(id)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid task ID",
+    });
+  }
+
+  const session = await mongoose.startSession();
+
+  try {
+    let cancelledTask;
+    let refundAmount = 0;
+
+    await session.withTransaction(async () => {
+      refundAmount = 0;
+
+      const task = await Task.findOne({
+        _id: id,
+        advertiser: req.user._id,
+      }).session(session);
+
+      if (!task) {
+        const error = new Error("Task not found");
+        error.statusCode = 404;
+        throw error;
+      }
+
+      if (!["pending", "active", "paused"].includes(task.status)) {
+        const error = new Error(`A ${task.status} task cannot be cancelled`);
+        error.statusCode = 409;
+        throw error;
+      }
+
+      const completed = task.completedSlots || 0;
+      const reserved = task.reservedSlots || 0;
+
+      let refundCents;
+
+      if (task.status === "pending") {
+        // Not approved yet: full refund (reward + platform fee)
+        refundCents = Math.round(Number(task.totalCost) * 100);
+      } else {
+        // Approved task: refund only unused slots' reward.
+        // Reserved slots stay in escrow so those freelancers can still be paid.
+        const unusedSlots = Math.max(0, task.totalSlots - completed - reserved);
+        refundCents =
+          unusedSlots * Math.round(Number(task.rewardPerWorker) * 100);
+      }
+
+      refundAmount = refundCents / 100;
+
+      cancelledTask = await Task.findOneAndUpdate(
+        {
+          _id: task._id,
+          status: task.status,
+          completedSlots: completed,
+          reservedSlots: reserved,
+        },
+        { $set: { status: "cancelled" } },
+        { returnDocument: "after", session },
+      );
+
+      if (!cancelledTask) {
+        const error = new Error("Task was updated. Please try again");
+        error.statusCode = 409;
+        throw error;
+      }
+
+      if (refundAmount > 0) {
+        const updatedBuyer = await User.findOneAndUpdate(
+          { _id: req.user._id },
+          { $inc: { walletBalance: refundAmount } },
+          { returnDocument: "after", session },
+        );
+
+        if (!updatedBuyer) {
+          throw new Error("Buyer not found");
+        }
+
+        const balanceAfter = Number(updatedBuyer.walletBalance);
+        const balanceBefore = Number((balanceAfter - refundAmount).toFixed(2));
+
+        await WalletTransaction.create(
+          [
+            {
+              user: req.user._id,
+              type: "task_refund",
+              amount: refundAmount,
+              status: "completed",
+              balanceBefore,
+              balanceAfter,
+              relatedTask: task._id,
+              note:
+                task.status === "pending"
+                  ? "Task cancelled before approval; full budget and platform fee refunded"
+                  : "Task cancelled; unused slots budget refunded",
+            },
+          ],
+          { session },
+        );
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      message:
+        refundAmount > 0
+          ? "Task cancelled and refund added to your wallet"
+          : "Task cancelled. No refundable amount",
+      refundAmount,
+      task: cancelledTask,
+    });
+  } catch (error) {
+    console.error("Cancel task error:", error);
+
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.statusCode ? error.message : "Failed to cancel task",
+    });
+  } finally {
+    await session.endSession();
+  }
+};
+
 module.exports = {
   createTask,
   getTasks,
@@ -1078,4 +1341,8 @@ module.exports = {
   getFreelancerTasks,
   getMySubmissions,
   getMySubmissionDetails,
+  //Buyer APIs
+  getBuyerTasks,
+  getBuyerTaskDetails,
+  cancelBuyerTask,
 };
