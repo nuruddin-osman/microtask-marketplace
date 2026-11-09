@@ -8,6 +8,8 @@ const {
   getUserDetails,
   updateUserStatus,
   getUsers,
+  getAllTasks,
+  getAllSubmissions,
 } = require("../controllers/adminController");
 
 router.get(
@@ -31,6 +33,15 @@ router.patch(
   protect,
   authorizeRoles("admin"),
   updateUserStatus,
+);
+
+router.get("/admin/tasks", protect, authorizeRoles("admin"), getAllTasks);
+
+router.get(
+  "/admin/submissions",
+  protect,
+  authorizeRoles("admin"),
+  getAllSubmissions,
 );
 
 module.exports = router;

@@ -375,9 +375,178 @@ const updateUserStatus = async (req, res) => {
   }
 };
 
+// ==========================================
+// ADMIN: GET ALL TASKS (ANY STATUS)
+// ==========================================
+const getAllTasks = async (req, res) => {
+  try {
+    const { status, category, search, advertiser } = req.query;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(
+      50,
+      Math.max(1, parseInt(req.query.limit, 10) || 20),
+    );
+
+    const filter = {};
+
+    if (status) {
+      if (
+        ![
+          "pending",
+          "active",
+          "paused",
+          "completed",
+          "rejected",
+          "cancelled",
+        ].includes(status)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid status filter",
+        });
+      }
+      filter.status = status;
+    }
+
+    if (typeof category === "string" && category.trim()) {
+      filter.category = category.trim();
+    }
+
+    if (advertiser) {
+      if (!mongoose.isValidObjectId(advertiser)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid advertiser ID",
+        });
+      }
+      filter.advertiser = advertiser;
+    }
+
+    if (typeof search === "string" && search.trim()) {
+      const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      filter.title = new RegExp(escaped, "i");
+    }
+
+    const [tasks, total] = await Promise.all([
+      Task.find(filter)
+        .populate("advertiser", "name username email")
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      Task.countDocuments(filter),
+    ]);
+
+    const formattedTasks = tasks.map((task) => ({
+      ...task,
+      remainingSlots: Math.max(
+        0,
+        task.totalSlots -
+          (task.completedSlots || 0) -
+          (task.reservedSlots || 0),
+      ),
+    }));
+
+    return res.status(200).json({
+      success: true,
+      count: formattedTasks.length,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      tasks: formattedTasks,
+    });
+  } catch (error) {
+    console.error("Get all tasks error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch tasks",
+    });
+  }
+};
+
+// ==========================================
+// ADMIN: GET ALL SUBMISSIONS (ANY STATUS)
+// ==========================================
+const getAllSubmissions = async (req, res) => {
+  try {
+    const { status, task, freelancer } = req.query;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(
+      50,
+      Math.max(1, parseInt(req.query.limit, 10) || 20),
+    );
+
+    const filter = {};
+
+    if (status) {
+      if (!["accepted", "submitted", "approved", "rejected"].includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid status filter",
+        });
+      }
+      filter.status = status;
+    }
+
+    if (task) {
+      if (!mongoose.isValidObjectId(task)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid task ID",
+        });
+      }
+      filter.task = task;
+    }
+
+    if (freelancer) {
+      if (!mongoose.isValidObjectId(freelancer)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid freelancer ID",
+        });
+      }
+      filter.freelancer = freelancer;
+    }
+
+    const [submissions, total] = await Promise.all([
+      TaskSubmission.find(filter)
+        .populate({
+          path: "task",
+          select: "title category rewardPerWorker status advertiser",
+          populate: { path: "advertiser", select: "name username" },
+        })
+        .populate("freelancer", "name username email")
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      TaskSubmission.countDocuments(filter),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      count: submissions.length,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      submissions,
+    });
+  } catch (error) {
+    console.error("Get all submissions error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch submissions",
+    });
+  }
+};
+
 module.exports = {
   getDashboardStats,
   getUsers,
   getUserDetails,
   updateUserStatus,
+  getAllTasks,
+  getAllSubmissions,
 };
