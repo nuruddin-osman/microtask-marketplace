@@ -307,8 +307,114 @@ const reviewWithdrawalRequest = async (req, res) => {
   }
 };
 
+// ==========================================
+// USER: GET MY WITHDRAWAL REQUESTS
+// ==========================================
+const getMyWithdrawals = async (req, res) => {
+  try {
+    const { status } = req.query;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(
+      50,
+      Math.max(1, parseInt(req.query.limit, 10) || 10),
+    );
+
+    const filter = { user: req.user._id, type: "withdrawal" };
+
+    if (status) {
+      if (!["pending", "completed", "rejected", "cancelled"].includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid status filter",
+        });
+      }
+      filter.status = status;
+    }
+
+    const [withdrawals, total] = await Promise.all([
+      WalletTransaction.find(filter)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      WalletTransaction.countDocuments(filter),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      count: withdrawals.length,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      withdrawals,
+    });
+  } catch (error) {
+    console.error("Get my withdrawals error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to get withdrawal history",
+    });
+  }
+};
+
+// ==========================================
+// ADMIN: GET ALL WITHDRAWALS (ANY STATUS)
+// ==========================================
+const getAllWithdrawals = async (req, res) => {
+  try {
+    const { status } = req.query;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(
+      50,
+      Math.max(1, parseInt(req.query.limit, 10) || 20),
+    );
+
+    const filter = { type: "withdrawal" };
+
+    if (status) {
+      if (!["pending", "completed", "rejected", "cancelled"].includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid status filter",
+        });
+      }
+      filter.status = status;
+    }
+
+    const [withdrawals, total] = await Promise.all([
+      WalletTransaction.find(filter)
+        .populate("user", "name email")
+        .populate("processedBy", "name")
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      WalletTransaction.countDocuments(filter),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      count: withdrawals.length,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      withdrawals,
+    });
+  } catch (error) {
+    console.error("Get all withdrawals error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to get withdrawals",
+    });
+  }
+};
+
 module.exports = {
   createWithdrawalRequest,
   getPendingWithdrawals,
   reviewWithdrawalRequest,
+  getMyWithdrawals,
+  getAllWithdrawals,
 };

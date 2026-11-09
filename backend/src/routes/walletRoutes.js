@@ -9,6 +9,8 @@ const {
   createDepositRequest,
   getPendingDeposits,
   reviewDepositRequest,
+  getMyDeposits,
+  getAllDeposits,
 } = require("../controllers/walletController");
 
 router.get("/wallet/balance", protect, getWalletBalance);
@@ -26,6 +28,15 @@ router.patch(
   protect,
   authorizeRoles("admin"),
   reviewDepositRequest,
+);
+
+router.get("/wallet/deposits", protect, getMyDeposits);
+
+router.get(
+  "/admin/wallet/deposits/all",
+  protect,
+  authorizeRoles("admin"),
+  getAllDeposits,
 );
 
 module.exports = router;

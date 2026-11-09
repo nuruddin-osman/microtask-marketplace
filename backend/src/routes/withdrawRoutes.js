@@ -9,6 +9,8 @@ const {
   createWithdrawalRequest,
   reviewWithdrawalRequest,
   getPendingWithdrawals,
+  getMyWithdrawals,
+  getAllWithdrawals,
 } = require("../controllers/withdrawController");
 
 router.post(
@@ -33,6 +35,22 @@ router.patch(
   protect,
   authorizeRoles("admin"),
   reviewWithdrawalRequest,
+);
+
+// ?status=pending|completed|rejected&page=1&limit=10
+router.get(
+  "/wallet/withdrawals",
+  protect,
+  authorizeRoles("freelancer"),
+  requireActiveMode("freelancer"),
+  getMyWithdrawals,
+);
+
+router.get(
+  "/admin/wallet/withdrawals/all",
+  protect,
+  authorizeRoles("admin"),
+  getAllWithdrawals,
 );
 
 module.exports = router;

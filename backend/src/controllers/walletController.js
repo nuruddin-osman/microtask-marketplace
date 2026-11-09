@@ -251,10 +251,116 @@ const reviewDepositRequest = async (req, res) => {
   }
 };
 
+// ==========================================
+// USER: GET MY DEPOSIT REQUESTS
+// ==========================================
+const getMyDeposits = async (req, res) => {
+  try {
+    const { status } = req.query;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(
+      50,
+      Math.max(1, parseInt(req.query.limit, 10) || 10),
+    );
+
+    const filter = { user: req.user._id, type: "deposit" };
+
+    if (status) {
+      if (!["pending", "completed", "rejected", "cancelled"].includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid status filter",
+        });
+      }
+      filter.status = status;
+    }
+
+    const [deposits, total] = await Promise.all([
+      WalletTransaction.find(filter)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      WalletTransaction.countDocuments(filter),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      count: deposits.length,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      deposits,
+    });
+  } catch (error) {
+    console.error("Get my deposits error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to get deposit history",
+    });
+  }
+};
+
+// ==========================================
+// ADMIN: GET ALL DEPOSITS (ANY STATUS)
+// ==========================================
+const getAllDeposits = async (req, res) => {
+  try {
+    const { status } = req.query;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(
+      50,
+      Math.max(1, parseInt(req.query.limit, 10) || 20),
+    );
+
+    const filter = { type: "deposit" };
+
+    if (status) {
+      if (!["pending", "completed", "rejected", "cancelled"].includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid status filter",
+        });
+      }
+      filter.status = status;
+    }
+
+    const [deposits, total] = await Promise.all([
+      WalletTransaction.find(filter)
+        .populate("user", "name email")
+        .populate("processedBy", "name")
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      WalletTransaction.countDocuments(filter),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      count: deposits.length,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      deposits,
+    });
+  } catch (error) {
+    console.error("Get all deposits error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to get deposits",
+    });
+  }
+};
+
 module.exports = {
   getWalletBalance,
   getWalletTransactions,
   createDepositRequest,
   getPendingDeposits,
   reviewDepositRequest,
+  getMyDeposits,
+  getAllDeposits,
 };
