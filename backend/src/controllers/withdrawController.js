@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const User = require("../models/userModels");
 const WalletTransaction = require("../models/walletTransactionModels");
+const { notifyUser } = require("../utils/notificationHelper");
 
 const WITHDRAWAL_FEE_PERCENT = 3;
 
@@ -272,6 +273,19 @@ const reviewWithdrawalRequest = async (req, res) => {
       if (!reviewedWithdrawal) {
         throw new Error("Withdrawal request was already reviewed");
       }
+    });
+
+    await notifyUser({
+      user: reviewedWithdrawal.user,
+      type:
+        status === "approved" ? "withdrawal_approved" : "withdrawal_rejected",
+      title:
+        status === "approved" ? "Withdrawal approved" : "Withdrawal rejected",
+      message:
+        status === "approved"
+          ? `Your withdrawal was approved. You will receive ${calculation.netAmount} after the fee.`
+          : `Your withdrawal request was rejected. ${calculation.grossAmount} has been refunded to your wallet.`,
+      relatedTransaction: reviewedWithdrawal._id,
     });
 
     return res.status(200).json({

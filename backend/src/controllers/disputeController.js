@@ -5,6 +5,7 @@ const Task = require("../models/taskModels");
 const TaskSubmission = require("../models/taskSubmissionModels");
 const User = require("../models/userModels");
 const WalletTransaction = require("../models/walletTransactionModels");
+const { notifyUser } = require("../utils/notificationHelper");
 
 // ==========================================
 // FREELANCER: CREATE APPEAL
@@ -95,6 +96,16 @@ const createAppeal = async (req, res) => {
       description: description.trim(),
       evidence: [],
       status: "open",
+    });
+
+    await notifyUser({
+      user: task.advertiser,
+      type: "appeal_created",
+      title: "Appeal submitted",
+      message: `A freelancer appealed a rejected submission on your task "${task.title}".`,
+      relatedTask: task._id,
+      relatedSubmission: submission._id,
+      relatedDispute: appeal._id,
     });
 
     return res.status(201).json({
@@ -483,6 +494,32 @@ const reviewAppeal = async (req, res) => {
       if (!reviewedAppeal) {
         throw new Error("Appeal review update failed");
       }
+    });
+
+    await notifyUser({
+      user: reviewedAppeal.openedBy,
+      type: decision === "accept" ? "appeal_accepted" : "appeal_rejected",
+      title: decision === "accept" ? "Appeal accepted" : "Appeal rejected",
+      message:
+        decision === "accept"
+          ? `Your appeal was accepted. ${rewardReleased} has been added to your wallet.`
+          : "Your appeal was reviewed and rejected by the admin.",
+      relatedTask: reviewedTask._id,
+      relatedSubmission: reviewedSubmission._id,
+      relatedDispute: reviewedAppeal._id,
+    });
+
+    await notifyUser({
+      user: reviewedAppeal.againstUser,
+      type: decision === "accept" ? "appeal_accepted" : "appeal_rejected",
+      title: "Appeal decision",
+      message:
+        decision === "accept"
+          ? `The admin accepted a freelancer's appeal on your task "${reviewedTask.title}".`
+          : `The admin rejected a freelancer's appeal on your task "${reviewedTask.title}". Your rejection stands.`,
+      relatedTask: reviewedTask._id,
+      relatedSubmission: reviewedSubmission._id,
+      relatedDispute: reviewedAppeal._id,
     });
 
     const remainingSlots =

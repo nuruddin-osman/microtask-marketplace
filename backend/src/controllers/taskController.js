@@ -3,6 +3,7 @@ const Task = require("../models/taskModels");
 const TaskSubmission = require("../models/taskSubmissionModels");
 const User = require("../models/userModels");
 const WalletTransaction = require("../models/walletTransactionModels");
+const { notifyUser } = require("../utils/notificationHelper");
 
 const createTask = async (req, res) => {
   const session = await mongoose.startSession();
@@ -361,6 +362,17 @@ const reviewTask = async (req, res) => {
       }
     });
 
+    await notifyUser({
+      user: reviewedTask.advertiser,
+      type: status === "active" ? "task_approved" : "task_rejected",
+      title: status === "active" ? "Task approved" : "Task rejected",
+      message:
+        status === "active"
+          ? `Your task "${reviewedTask.title}" has been approved and is now live.`
+          : `Your task "${reviewedTask.title}" was rejected. The full amount has been refunded.`,
+      relatedTask: reviewedTask._id,
+    });
+
     return res.status(200).json({
       success: true,
       message:
@@ -520,6 +532,21 @@ const submitProof = async (req, res) => {
     submission.status = "submitted";
 
     await submission.save();
+
+    const relatedTask = await Task.findById(submission.task).select(
+      "title advertiser",
+    );
+
+    if (relatedTask) {
+      await notifyUser({
+        user: relatedTask.advertiser,
+        type: "new_submission",
+        title: "New submission received",
+        message: `A freelancer submitted proof for your task "${relatedTask.title}". Please review it.`,
+        relatedTask: relatedTask._id,
+        relatedSubmission: submission._id,
+      });
+    }
 
     return res.status(200).json({
       success: true,
@@ -745,6 +772,20 @@ const reviewSubmission = async (req, res) => {
           { session },
         );
       }
+    });
+
+    await notifyUser({
+      user: reviewedSubmission.freelancer,
+      type:
+        status === "approved" ? "submission_approved" : "submission_rejected",
+      title:
+        status === "approved" ? "Submission approved" : "Submission rejected",
+      message:
+        status === "approved"
+          ? `Your work on "${reviewedTask.title}" was approved. ${reviewedTask.rewardPerWorker} has been added to your wallet.`
+          : `Your work on "${reviewedTask.title}" was rejected. You can submit an appeal.`,
+      relatedTask: reviewedTask._id,
+      relatedSubmission: reviewedSubmission._id,
     });
 
     const remainingSlots =

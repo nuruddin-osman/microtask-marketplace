@@ -1,5 +1,6 @@
 const User = require("../models/userModels");
 const WalletTransaction = require("../models/walletTransactionModels");
+const { notifyUser } = require("../utils/notificationHelper");
 
 const getWalletBalance = async (req, res) => {
   try {
@@ -229,6 +230,17 @@ const reviewDepositRequest = async (req, res) => {
         error.statusCode = 409;
         throw error;
       }
+    });
+
+    await notifyUser({
+      user: reviewedDeposit.user,
+      type: status === "approved" ? "deposit_approved" : "deposit_rejected",
+      title: status === "approved" ? "Deposit approved" : "Deposit rejected",
+      message:
+        status === "approved"
+          ? `Your deposit of ${reviewedDeposit.amount} was approved and added to your wallet.`
+          : `Your deposit request of ${reviewedDeposit.amount} was rejected.`,
+      relatedTransaction: reviewedDeposit._id,
     });
 
     return res.status(200).json({

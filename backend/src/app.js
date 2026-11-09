@@ -11,6 +11,7 @@ const withdrawRoutes = require("./routes/withdrawRoutes");
 const disputeRoutes = require("./routes/disputeRoutes");
 const freelancerRoutes = require("./routes/freelancerRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
 
 app.use("/api", authRoutes);
 app.use("/api", taskRoutes);
@@ -19,5 +20,6 @@ app.use("/api", withdrawRoutes);
 app.use("/api", disputeRoutes);
 app.use("/api", freelancerRoutes);
 app.use("/api", adminRoutes);
+app.use("/api", notificationRoutes);
 
 module.exports = app;
