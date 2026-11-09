@@ -14,6 +14,7 @@ const {
 const router = express.Router();
 
 router.use(
+  "/freelancer",
   protect,
   authorizeRoles("freelancer"),
   requireActiveMode("freelancer"),
