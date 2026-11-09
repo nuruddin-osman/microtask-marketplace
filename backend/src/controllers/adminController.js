@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const User = require("../models/userModels");
 const Task = require("../models/taskModels");
 const TaskSubmission = require("../models/taskSubmissionModels");
@@ -184,6 +185,199 @@ const getDashboardStats = async (req, res) => {
   }
 };
 
+// ==========================================
+// ADMIN: GET ALL USERS
+// ==========================================
+const getUsers = async (req, res) => {
+  try {
+    const { search, role, isActive } = req.query;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(
+      50,
+      Math.max(1, parseInt(req.query.limit, 10) || 20),
+    );
+
+    const filter = {};
+
+    if (role) {
+      if (!["freelancer", "buyer", "admin"].includes(role)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid role filter",
+        });
+      }
+      filter.roles = role;
+    }
+
+    if (isActive !== undefined) {
+      if (!["true", "false"].includes(isActive)) {
+        return res.status(400).json({
+          success: false,
+          message: "isActive must be true or false",
+        });
+      }
+      filter.isActive = isActive === "true";
+    }
+
+    if (typeof search === "string" && search.trim()) {
+      const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(escaped, "i");
+      filter.$or = [{ name: regex }, { username: regex }, { email: regex }];
+    }
+
+    const [users, total] = await Promise.all([
+      User.find(filter)
+        .select("-password")
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      User.countDocuments(filter),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      count: users.length,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      users,
+    });
+  } catch (error) {
+    console.error("Get users error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch users",
+    });
+  }
+};
+
+// ==========================================
+// ADMIN: GET SINGLE USER DETAILS
+// ==========================================
+const getUserDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID",
+      });
+    }
+
+    const user = await User.findById(id).select("-password").lean();
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const [tasksCreated, submissionsMade, submissionsApproved] =
+      await Promise.all([
+        Task.countDocuments({ advertiser: user._id }),
+        TaskSubmission.countDocuments({ freelancer: user._id }),
+        TaskSubmission.countDocuments({
+          freelancer: user._id,
+          status: "approved",
+        }),
+      ]);
+
+    return res.status(200).json({
+      success: true,
+      user,
+      activity: {
+        tasksCreated,
+        submissionsMade,
+        submissionsApproved,
+      },
+    });
+  } catch (error) {
+    console.error("Get user details error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch user details",
+    });
+  }
+};
+
+// ==========================================
+// ADMIN: BAN / UNBAN USER
+// ==========================================
+const updateUserStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isActive } = req.body || {};
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID",
+      });
+    }
+
+    if (typeof isActive !== "boolean") {
+      return res.status(400).json({
+        success: false,
+        message: "isActive must be true or false",
+      });
+    }
+
+    if (id === req.user._id.toString()) {
+      return res.status(400).json({
+        success: false,
+        message: "You cannot change your own account status",
+      });
+    }
+
+    const target = await User.findById(id).select("roles");
+
+    if (!target) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    if (target.roles.includes("admin")) {
+      return res.status(403).json({
+        success: false,
+        message: "Admin accounts cannot be banned",
+      });
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      id,
+      { $set: { isActive } },
+      { returnDocument: "after", runValidators: true },
+    )
+      .select("-password")
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      message: isActive
+        ? "User unbanned successfully"
+        : "User banned successfully",
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error("Update user status error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update user status",
+    });
+  }
+};
+
 module.exports = {
   getDashboardStats,
+  getUsers,
+  getUserDetails,
+  updateUserStatus,
 };
