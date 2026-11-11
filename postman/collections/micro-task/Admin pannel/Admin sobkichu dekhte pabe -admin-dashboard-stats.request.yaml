@@ -1,0 +1,5 @@
+$kind: http-request
+name: Admin sobkichu dekhte pabe /admin/dashboard/stats
+url: ""
+method: GET
+order: 1000

@@ -2,4 +2,4 @@ $kind: http-request
 name: Freelancer wallet balance check /wallet/balance
 url: ""
 method: GET
-order: 10000
+order: 3100

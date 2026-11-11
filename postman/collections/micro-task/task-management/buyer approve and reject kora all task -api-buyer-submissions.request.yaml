@@ -1,0 +1,5 @@
+$kind: http-request
+name: buyer approve and reject kora all task /api/buyer/submissions
+url: ""
+method: GET
+order: 8000

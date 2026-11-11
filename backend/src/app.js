@@ -3,6 +3,9 @@ const express = require("express");
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+const path = require("path");
+const uploadRoutes = require("./routes/uploadRoutes");
 
 const authRoutes = require("./routes/authRoutes");
 const taskRoutes = require("./routes/taskRoutes");
@@ -21,5 +24,6 @@ app.use("/api", disputeRoutes);
 app.use("/api", freelancerRoutes);
 app.use("/api", adminRoutes);
 app.use("/api", notificationRoutes);
+app.use("/api", uploadRoutes);
 
 module.exports = app;

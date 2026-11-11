@@ -1,0 +1,5 @@
+$kind: http-request
+name: Admin all pending withdraw request dekhbe /admin/wallet/pending-withdrawals
+url: ""
+method: GET
+order: 5000

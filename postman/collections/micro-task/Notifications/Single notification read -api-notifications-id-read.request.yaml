@@ -1,0 +1,5 @@
+$kind: http-request
+name: Single notification read /api/notifications/:id/read
+url: ""
+method: GET
+order: 3000

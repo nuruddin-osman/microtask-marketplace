@@ -1,0 +1,5 @@
+$kind: http-request
+name: All notification read /api/notifications/read-all
+url: ""
+method: GET
+order: 4000

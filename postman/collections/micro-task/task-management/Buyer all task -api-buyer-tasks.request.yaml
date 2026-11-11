@@ -1,0 +1,5 @@
+$kind: http-request
+name: Buyer all task /api/buyer/tasks
+url: ""
+method: GET
+order: 1561

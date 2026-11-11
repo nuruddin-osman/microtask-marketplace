@@ -1,0 +1,5 @@
+$kind: http-request
+name: Admin all users dekhte pabe /api/admin/users
+url: ""
+method: GET
+order: 2000

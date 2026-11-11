@@ -23,7 +23,7 @@ router.post(
 
 // Admin: Get pending withdrawal requests
 router.get(
-  "/admin/wallet/withdrawals",
+  "/admin/wallet/pending-withdrawals",
   protect,
   authorizeRoles("admin"),
   getPendingWithdrawals,

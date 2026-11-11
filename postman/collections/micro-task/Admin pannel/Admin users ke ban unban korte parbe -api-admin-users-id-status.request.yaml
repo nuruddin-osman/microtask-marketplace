@@ -1,0 +1,5 @@
+$kind: http-request
+name: Admin users ke ban unban korte parbe /api/admin/users/:id/status
+url: ""
+method: GET
+order: 4000

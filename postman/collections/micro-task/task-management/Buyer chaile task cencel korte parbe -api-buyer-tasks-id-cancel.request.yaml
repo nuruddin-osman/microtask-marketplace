@@ -1,0 +1,5 @@
+$kind: http-request
+name: Buyer chaile task cencel korte parbe /api/buyer/tasks/:id/cancel
+url: ""
+method: GET
+order: 12000

@@ -1,0 +1,5 @@
+$kind: http-request
+name: Admin single user ke dekhte pabe /api/admin/users/:id
+url: ""
+method: GET
+order: 3000

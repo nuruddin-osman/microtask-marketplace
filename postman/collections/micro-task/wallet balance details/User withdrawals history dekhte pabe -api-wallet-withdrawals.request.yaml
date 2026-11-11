@@ -1,0 +1,5 @@
+$kind: http-request
+name: User withdrawals history dekhte pabe /api/wallet/withdrawals
+url: ""
+method: GET
+order: 9000

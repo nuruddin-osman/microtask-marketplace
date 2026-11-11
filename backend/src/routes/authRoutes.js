@@ -5,6 +5,8 @@ const {
   loginUser,
   getMe,
   switchMode,
+  updateProfile,
+  changePassword,
 } = require("../controllers/authController");
 
 const { protect } = require("../middleware/authMiddleware");
@@ -21,6 +23,8 @@ router.post("/auth/register", registerUser);
 router.post("/auth/login", loginUser);
 router.get("/auth/me", protect, getMe);
 router.patch("/auth/switch-mode", protect, switchMode);
+router.patch("/auth/profile", protect, updateProfile);
+router.patch("/auth/change-password", protect, changePassword);
 
 // Freelancer Dashboard
 router.get(

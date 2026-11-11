@@ -1,0 +1,5 @@
+$kind: http-request
+name: Admin all task dekhte pabe /api/admin/tasks
+url: ""
+method: GET
+order: 5000

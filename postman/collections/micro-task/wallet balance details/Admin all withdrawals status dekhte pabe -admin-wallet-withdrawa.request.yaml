@@ -1,0 +1,5 @@
+$kind: http-request
+name: Admin all withdrawals status dekhte pabe /admin/wallet/withdrawals/all
+url: ""
+method: GET
+order: 10000

@@ -1,5 +1,18 @@
 $kind: http-request
 name: api/auth/register
-url: ""
-method: GET
+url: http://localhost:4000/api/auth/register
+method: POST
+body:
+  type: json
+  content: "  {\r
+
+    \    \"name\": \"Md Nuruddin Osman\",\r
+
+    \    \"username\": \"sumon34\",\r
+
+    \    \"email\": \"nuruddin@gmail.com\",\r
+
+    \    \"password\": \"123456\"\r
+
+    \  }"
 order: 870

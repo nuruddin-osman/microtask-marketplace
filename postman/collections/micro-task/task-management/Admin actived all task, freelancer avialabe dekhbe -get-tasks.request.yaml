@@ -1,5 +1,0 @@
-$kind: http-request
-name: Admin actived all task, freelancer avialabe dekhbe /get/tasks
-url: ""
-method: GET
-order: 2000

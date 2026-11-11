@@ -1,0 +1,5 @@
+$kind: http-request
+name: Admin all deposit history dekhte pabe /api/admin/wallet/deposits/all
+url: ""
+method: GET
+order: 8000

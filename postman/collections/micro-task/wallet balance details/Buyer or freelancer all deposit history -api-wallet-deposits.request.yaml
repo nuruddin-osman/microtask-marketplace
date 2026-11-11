@@ -1,0 +1,5 @@
+$kind: http-request
+name: Buyer or freelancer all deposit history /api/wallet/deposits
+url: ""
+method: GET
+order: 7000
