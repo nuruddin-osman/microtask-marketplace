@@ -1,0 +1,5 @@
+$kind: http-request
+name: Name and Username update /api/auth/profile-update
+url: ""
+method: GET
+order: 10000
