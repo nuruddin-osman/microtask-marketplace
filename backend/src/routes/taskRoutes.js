@@ -17,6 +17,9 @@ const {
   getBuyerTasks,
   getBuyerTaskDetails,
   cancelBuyerTask,
+  pauseBuyerTask,
+  resumeBuyerTask,
+  getTaskDetails,
 } = require("../controllers/taskController");
 
 const router = express.Router();
@@ -115,6 +118,30 @@ router.patch(
   authorizeRoles("buyer"),
   requireActiveMode("buyer"),
   cancelBuyerTask,
+);
+
+router.get(
+  "/tasks-details/:id",
+  protect,
+  authorizeRoles("freelancer"),
+  requireActiveMode("freelancer"),
+  getTaskDetails,
+);
+
+router.patch(
+  "/buyer/tasks/:id/pause",
+  protect,
+  authorizeRoles("buyer"),
+  requireActiveMode("buyer"),
+  pauseBuyerTask,
+);
+
+router.patch(
+  "/buyer/tasks/:id/resume",
+  protect,
+  authorizeRoles("buyer"),
+  requireActiveMode("buyer"),
+  resumeBuyerTask,
 );
 
 module.exports = router;

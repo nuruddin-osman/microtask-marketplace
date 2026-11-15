@@ -223,6 +223,55 @@ const getTasks = async (req, res) => {
   }
 };
 
+// ==========================================
+// FREELANCER: GET SINGLE TASK DETAILS
+// ==========================================
+const getTaskDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid task ID",
+      });
+    }
+
+    const [task, mySubmission] = await Promise.all([
+      Task.findById(id).populate("advertiser", "name username").lean(),
+      TaskSubmission.findOne({ task: id, freelancer: req.user._id })
+        .select("_id status proofText proofUrl createdAt updatedAt reviewedAt")
+        .lean(),
+    ]);
+
+    // Non-active tasks are visible only to a freelancer who already joined them
+    if (!task || (task.status !== "active" && !mySubmission)) {
+      return res.status(404).json({
+        success: false,
+        message: "Task not found",
+      });
+    }
+
+    task.remainingSlots = Math.max(
+      0,
+      task.totalSlots - (task.completedSlots || 0) - (task.reservedSlots || 0),
+    );
+
+    return res.status(200).json({
+      success: true,
+      task,
+      mySubmission: mySubmission || null,
+    });
+  } catch (error) {
+    console.error("Get task details error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch task details",
+    });
+  }
+};
+
 const getPendingTasks = async (req, res) => {
   try {
     const tasks = await Task.find({ status: "pending" })
@@ -1368,6 +1417,60 @@ const cancelBuyerTask = async (req, res) => {
   }
 };
 
+// ==========================================
+// BUYER: PAUSE / RESUME TASK
+// ==========================================
+const changeBuyerTaskStatus = (fromStatus, toStatus, doneText) => {
+  return async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      if (!mongoose.isValidObjectId(id)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid task ID",
+        });
+      }
+
+      const task = await Task.findOneAndUpdate(
+        { _id: id, advertiser: req.user._id, status: fromStatus },
+        { $set: { status: toStatus } },
+        { returnDocument: "after" },
+      ).lean();
+
+      if (!task) {
+        const exists = await Task.findOne({
+          _id: id,
+          advertiser: req.user._id,
+        }).select("status");
+
+        return res.status(exists ? 409 : 404).json({
+          success: false,
+          message: exists
+            ? `Only a ${fromStatus} task can be ${doneText}. This task is ${exists.status}`
+            : "Task not found",
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: `Task ${doneText} successfully`,
+        task,
+      });
+    } catch (error) {
+      console.error("Change task status error:", error);
+
+      return res.status(500).json({
+        success: false,
+        message: "Failed to update task status",
+      });
+    }
+  };
+};
+
+const pauseBuyerTask = changeBuyerTaskStatus("active", "paused", "paused");
+const resumeBuyerTask = changeBuyerTaskStatus("paused", "active", "resumed");
+
 module.exports = {
   createTask,
   getTasks,
@@ -1379,6 +1482,7 @@ module.exports = {
   getBuyerSubmissions,
   getBuyerSubmissionDetails,
   // Freelancer APIs
+  getTaskDetails,
   getFreelancerTasks,
   getMySubmissions,
   getMySubmissionDetails,
@@ -1386,4 +1490,6 @@ module.exports = {
   getBuyerTasks,
   getBuyerTaskDetails,
   cancelBuyerTask,
+  pauseBuyerTask,
+  resumeBuyerTask,
 };
