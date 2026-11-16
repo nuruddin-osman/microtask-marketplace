@@ -9,6 +9,7 @@ const {
   authLimiter,
   uploadLimiter,
   walletLimiter,
+  supportLimiter,
 } = require("./middleware/rateLimiters");
 const { notFound, errorHandler } = require("./middleware/errorMiddleware");
 
@@ -59,6 +60,11 @@ app.use("/api/auth/reset-password", authLimiter);
 app.use("/api/uploads", uploadLimiter);
 app.use("/api/wallet/deposit", walletLimiter);
 app.use("/api/wallet/withdrawal", walletLimiter);
+// Only POST (creating tickets / replying), so reading tickets is not limited
+app.post(
+  ["/api/support/tickets", "/api/support/tickets/:id/messages"],
+  supportLimiter,
+);
 app.use("/api", apiLimiter);
 
 const authRoutes = require("./routes/authRoutes");
@@ -72,6 +78,7 @@ const notificationRoutes = require("./routes/notificationRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
 const reviewRoutes = require("./routes/reviewRoutes");
+const ticketRoutes = require("./routes/ticketRoutes");
 
 app.use("/api", authRoutes);
 app.use("/api", taskRoutes);
@@ -84,6 +91,7 @@ app.use("/api", notificationRoutes);
 app.use("/api", uploadRoutes);
 app.use("/api", categoryRoutes);
 app.use("/api", reviewRoutes);
+app.use("/api", ticketRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

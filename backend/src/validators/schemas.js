@@ -127,6 +127,42 @@ const updateUserStatus = Joi.object({
   isActive: Joi.boolean().required(),
 });
 
+// ---------- Categories ----------
+const createCategory = Joi.object({
+  name: Joi.string().trim().min(2).max(50).required(),
+});
+
+const updateCategory = Joi.object({
+  name: Joi.string().trim().min(2).max(50),
+  isActive: Joi.boolean(),
+}).min(1);
+
+// ---------- Ratings ----------
+const rateSubmission = Joi.object({
+  rating: Joi.number().integer().min(1).max(5).required(),
+  comment: text(500).allow(""),
+});
+
+// ---------- Support tickets ----------
+const createTicket = Joi.object({
+  subject: Joi.string().trim().min(5).max(150).required(),
+  category: Joi.string()
+    .valid("payment", "task", "account", "technical", "other")
+    .required(),
+  message: text(3000).min(1).required(),
+  relatedTask: Joi.string()
+    .pattern(/^[0-9a-fA-F]{24}$/)
+    .messages({ "string.pattern.base": "relatedTask must be a valid ID" }),
+});
+
+const ticketMessage = Joi.object({
+  message: text(3000).min(1).required(),
+});
+
+const updateTicketStatus = Joi.object({
+  status: Joi.string().valid("in_progress", "resolved", "closed").required(),
+});
+
 module.exports = {
   register,
   login,
@@ -145,4 +181,11 @@ module.exports = {
   createAppeal,
   reviewAppeal,
   updateUserStatus,
+
+  createCategory,
+  updateCategory,
+  rateSubmission,
+  createTicket,
+  ticketMessage,
+  updateTicketStatus,
 };

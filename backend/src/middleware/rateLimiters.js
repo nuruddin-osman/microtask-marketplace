@@ -37,4 +37,17 @@ const walletLimiter = buildLimiter(
   "Too many wallet requests. Please try again later.",
 );
 
-module.exports = { apiLimiter, authLimiter, uploadLimiter, walletLimiter };
+// Support ticket creation / replies
+const supportLimiter = buildLimiter(
+  15,
+  20,
+  "Too many support messages. Please try again later.",
+);
+
+module.exports = {
+  apiLimiter,
+  authLimiter,
+  uploadLimiter,
+  walletLimiter,
+  supportLimiter,
+};
