@@ -71,6 +71,7 @@ const adminRoutes = require("./routes/adminRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
+const reviewRoutes = require("./routes/reviewRoutes");
 
 app.use("/api", authRoutes);
 app.use("/api", taskRoutes);
@@ -82,6 +83,7 @@ app.use("/api", adminRoutes);
 app.use("/api", notificationRoutes);
 app.use("/api", uploadRoutes);
 app.use("/api", categoryRoutes);
+app.use("/api", reviewRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
