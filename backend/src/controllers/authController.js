@@ -397,11 +397,20 @@ const changePassword = async (req, res) => {
     }
 
     user.password = await bcrypt.hash(newPassword, 12);
+    user.passwordChangedAt = new Date();
     await user.save();
+
+    // Old tokens are now invalid, so give this device a fresh one
+    const token = jwt.sign(
+      { userId: user._id.toString() },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" },
+    );
 
     return res.status(200).json({
       success: true,
       message: "Password changed successfully",
+      token,
     });
   } catch (error) {
     console.error("Change password error:", error.message);
@@ -533,7 +542,7 @@ const resetPassword = async (req, res) => {
         passwordResetExpires: { $gt: new Date() },
       },
       {
-        $set: { password: hashedPassword },
+        $set: { password: hashedPassword, passwordChangedAt: new Date() },
         $unset: { passwordResetToken: "", passwordResetExpires: "" },
       },
       { returnDocument: "after" },
