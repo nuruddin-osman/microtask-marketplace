@@ -8,10 +8,11 @@ const {
   markAllAsRead,
   getNotifications,
 } = require("../controllers/notificationController");
+const { validateId } = require("../middleware/validate");
 
 router.get("/notifications", protect, getNotifications);
 router.get("/notifications/unread-count", protect, getUnreadCount);
 router.patch("/notifications/read-all", protect, markAllAsRead);
-router.patch("/notifications/:id/read", protect, markAsRead);
+router.patch("/notifications/:id/read", protect, validateId("id"), markAsRead);
 
 module.exports = router;

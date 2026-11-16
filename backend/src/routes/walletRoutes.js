@@ -12,6 +12,8 @@ const {
   getMyDeposits,
   getAllDeposits,
 } = require("../controllers/walletController");
+const { validate, validateId } = require("../middleware/validate");
+const schemas = require("../validators/schemas");
 
 router.get("/wallet/balance", protect, getWalletBalance);
 router.get("/wallet/transactions", protect, getWalletTransactions);
@@ -27,10 +29,17 @@ router.patch(
   "/admin/wallet/deposits/:id/review",
   protect,
   authorizeRoles("admin"),
+  validateId("id"),
+  validate(schemas.reviewTransaction),
   reviewDepositRequest,
 );
 
-router.get("/wallet/deposits", protect, getMyDeposits);
+router.get(
+  "/wallet/deposits",
+  protect,
+  validate(schemas.deposit),
+  getMyDeposits,
+);
 
 router.get(
   "/admin/wallet/deposits/all",

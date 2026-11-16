@@ -21,6 +21,8 @@ const {
   resumeBuyerTask,
   getTaskDetails,
 } = require("../controllers/taskController");
+const schemas = require("../validators/schemas");
+const { validate, validateId } = require("../middleware/validate");
 
 const router = express.Router();
 
@@ -29,6 +31,7 @@ router.post(
   protect,
   authorizeRoles("buyer", "admin"),
   requireActiveMode("buyer"),
+  validate(schemas.createTask),
   createTask,
 );
 // Get available tasks — Freelancer mode
@@ -53,6 +56,8 @@ router.patch(
   "/admin/tasks/:id/review",
   protect,
   authorizeRoles("admin"),
+  validateId("id"),
+  validate(schemas.reviewTask),
   reviewTask,
 );
 
@@ -61,6 +66,7 @@ router.post(
   protect,
   authorizeRoles("freelancer"),
   requireActiveMode("freelancer"),
+  validateId("id"),
   acceptTask,
 );
 
@@ -69,6 +75,8 @@ router.patch(
   protect,
   authorizeRoles("freelancer"),
   requireActiveMode("freelancer"),
+  validateId("id"),
+  validate(schemas.submitProof),
   submitProof,
 );
 
@@ -77,6 +85,8 @@ router.patch(
   protect,
   authorizeRoles("buyer"),
   requireActiveMode("buyer"),
+  validateId("id"),
+  validate(schemas.reviewSubmission),
   reviewSubmission,
 );
 
@@ -93,6 +103,7 @@ router.get(
   protect,
   authorizeRoles("buyer"),
   requireActiveMode("buyer"),
+  validateId("id"),
   getBuyerSubmissionDetails,
 );
 
@@ -117,6 +128,7 @@ router.patch(
   protect,
   authorizeRoles("buyer"),
   requireActiveMode("buyer"),
+  validateId("id"),
   cancelBuyerTask,
 );
 
@@ -125,6 +137,7 @@ router.get(
   protect,
   authorizeRoles("freelancer"),
   requireActiveMode("freelancer"),
+  validateId("id"),
   getTaskDetails,
 );
 
@@ -133,6 +146,7 @@ router.patch(
   protect,
   authorizeRoles("buyer"),
   requireActiveMode("buyer"),
+  validateId("id"),
   pauseBuyerTask,
 );
 
@@ -141,6 +155,7 @@ router.patch(
   protect,
   authorizeRoles("buyer"),
   requireActiveMode("buyer"),
+  validateId("id"),
   resumeBuyerTask,
 );
 

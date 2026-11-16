@@ -12,6 +12,8 @@ const {
   authorizeRoles,
   requireActiveMode,
 } = require("../middleware/roleMiddleware");
+const { validateId, validate } = require("../middleware/validate");
+const schemas = require("../validators/schemas");
 
 // Freelancer: Create Appeal
 router.post(
@@ -19,6 +21,8 @@ router.post(
   protect,
   authorizeRoles("freelancer"),
   requireActiveMode("freelancer"),
+  validateId("submissionId"),
+  validate(schemas.createAppeal),
   createAppeal,
 );
 
@@ -30,6 +34,7 @@ router.get(
   "/admin/appeals/:id",
   protect,
   authorizeRoles("admin"),
+  validateId("id"),
   getAppealDetails,
 );
 
@@ -38,6 +43,8 @@ router.patch(
   "/admin/appeals/:id/review",
   protect,
   authorizeRoles("admin"),
+  validateId("id"),
+  validate(schemas.reviewAppeal),
   reviewAppeal,
 );
 

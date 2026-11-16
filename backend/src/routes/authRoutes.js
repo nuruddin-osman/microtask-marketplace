@@ -17,18 +17,43 @@ const {
   authorizeRoles,
   requireActiveMode,
 } = require("../middleware/roleMiddleware");
+const { validate } = require("../middleware/validate");
+const schemas = require("../validators/schemas");
 
 const router = express.Router();
 
 // Authentication routes
-router.post("/auth/register", registerUser);
-router.post("/auth/login", loginUser);
+router.post("/auth/register", validate(schemas.register), registerUser);
+router.post("/auth/login", validate(schemas.login), loginUser);
 router.get("/auth/me", protect, getMe);
-router.patch("/auth/switch-mode", protect, switchMode);
-router.patch("/auth/profile-update", protect, updateProfile);
-router.patch("/auth/change-password", protect, changePassword);
-router.post("/auth/forgot-password", forgotPassword);
-router.post("/auth/reset-password", resetPassword);
+router.patch(
+  "/auth/switch-mode",
+  protect,
+  validate(schemas.switchMode),
+  switchMode,
+);
+router.patch(
+  "/auth/profile-update",
+  protect,
+  validate(schemas.updateProfile),
+  updateProfile,
+);
+router.patch(
+  "/auth/change-password",
+  protect,
+  validate(schemas.changePassword),
+  changePassword,
+);
+router.post(
+  "/auth/forgot-password",
+  validate(schemas.forgotPassword),
+  forgotPassword,
+);
+router.post(
+  "/auth/reset-password",
+  validate(schemas.resetPassword),
+  resetPassword,
+);
 
 // Freelancer Dashboard
 router.get(

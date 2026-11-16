@@ -11,6 +11,8 @@ const {
   getAllTasks,
   getAllSubmissions,
 } = require("../controllers/adminController");
+const { validateId, validate } = require("../middleware/validate");
+const schemas = require("../validators/schemas");
 
 router.get(
   "/admin/dashboard/stats",
@@ -25,6 +27,7 @@ router.get(
   "/admin/users/:id",
   protect,
   authorizeRoles("admin"),
+  validateId("id"),
   getUserDetails,
 );
 
@@ -32,6 +35,8 @@ router.patch(
   "/admin/users/:id/status",
   protect,
   authorizeRoles("admin"),
+  validateId("id"),
+  validate(schemas.updateUserStatus),
   updateUserStatus,
 );
 

@@ -11,6 +11,7 @@ const {
   acceptTask,
   submitProof,
 } = require("../controllers/taskController");
+const { validateId } = require("../middleware/validate");
 const router = express.Router();
 
 router.use(
@@ -25,7 +26,11 @@ router.get("/freelancer/tasks", getFreelancerTasks);
 
 // My submissions
 router.get("/freelancer/my-submissions", getMySubmissions);
-router.get("/freelancer/my-submissions/:id", getMySubmissionDetails);
+router.get(
+  "/freelancer/my-submissions/:id",
+  validateId("id"),
+  getMySubmissionDetails,
+);
 
 // Accept a task
 // router.post("/tasks/:id/accept", acceptTask);
