@@ -1,0 +1,5 @@
+$kind: http-request
+name: Buyer task Resume korte parbe  /api/buyer/tasks/:id/resume
+url: ""
+method: GET
+order: 15000

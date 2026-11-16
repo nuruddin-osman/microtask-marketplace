@@ -7,6 +7,8 @@ const {
   switchMode,
   updateProfile,
   changePassword,
+  forgotPassword,
+  resetPassword,
 } = require("../controllers/authController");
 
 const { protect } = require("../middleware/authMiddleware");
@@ -25,6 +27,8 @@ router.get("/auth/me", protect, getMe);
 router.patch("/auth/switch-mode", protect, switchMode);
 router.patch("/auth/profile-update", protect, updateProfile);
 router.patch("/auth/change-password", protect, changePassword);
+router.post("/auth/forgot-password", forgotPassword);
+router.post("/auth/reset-password", resetPassword);
 
 // Freelancer Dashboard
 router.get(

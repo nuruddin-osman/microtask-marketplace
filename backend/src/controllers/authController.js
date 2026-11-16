@@ -1,7 +1,9 @@
 require("dotenv").config();
 const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const User = require("../models/userModels");
+const { sendEmail } = require("../utils/sendEmail");
 
 const registerUser = async (req, res) => {
   try {
@@ -411,6 +413,153 @@ const changePassword = async (req, res) => {
   }
 };
 
+// ==========================================
+// FORGOT PASSWORD: SEND RESET LINK
+// ==========================================
+const forgotPassword = async (req, res) => {
+  // Same response whether the email exists or not (prevents email guessing)
+  const genericResponse = {
+    success: true,
+    message:
+      "If an account exists with this email, a password reset link has been sent.",
+  };
+
+  try {
+    const { email } = req.body || {};
+
+    if (typeof email !== "string" || !email.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
+    }
+
+    const user = await User.findOne({ email: email.trim().toLowerCase() });
+
+    if (!user || !user.isActive) {
+      return res.status(200).json(genericResponse);
+    }
+
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(resetToken)
+      .digest("hex");
+
+    await User.updateOne(
+      { _id: user._id },
+      {
+        $set: {
+          passwordResetToken: hashedToken,
+          passwordResetExpires: new Date(Date.now() + 15 * 60 * 1000),
+        },
+      },
+    );
+
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+    const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`;
+
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: "Password reset request",
+        text: `Hello ${user.name},\n\nUse this link to reset your password (valid for 15 minutes):\n${resetUrl}\n\nIf you did not request this, ignore this email.`,
+        html: `<p>Hello ${user.name},</p>
+<p>Click the button below to reset your password. This link is valid for <b>15 minutes</b>.</p>
+<p><a href="${resetUrl}" style="background:#2563eb;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;">Reset Password</a></p>
+<p>If the button does not work, copy this link:<br>${resetUrl}</p>
+<p>If you did not request this, you can safely ignore this email.</p>`,
+      });
+    } catch (mailError) {
+      // Email failed: remove the token so it cannot be used
+      await User.updateOne(
+        { _id: user._id },
+        { $unset: { passwordResetToken: "", passwordResetExpires: "" } },
+      );
+
+      console.error("Send reset email error:", mailError.message);
+
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send reset email. Please try again later.",
+      });
+    }
+
+    return res.status(200).json(genericResponse);
+  } catch (error) {
+    console.error("Forgot password error:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+// ==========================================
+// RESET PASSWORD: USING THE EMAILED TOKEN
+// ==========================================
+const resetPassword = async (req, res) => {
+  try {
+    const { token, newPassword } = req.body || {};
+
+    if (
+      typeof token !== "string" ||
+      !token ||
+      typeof newPassword !== "string" ||
+      !newPassword
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Token and new password are required",
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "New password must be at least 6 characters",
+      });
+    }
+
+    const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+    // Atomic: token can be used only once
+    const user = await User.findOneAndUpdate(
+      {
+        passwordResetToken: hashedToken,
+        passwordResetExpires: { $gt: new Date() },
+      },
+      {
+        $set: { password: hashedPassword },
+        $unset: { passwordResetToken: "", passwordResetExpires: "" },
+      },
+      { returnDocument: "after" },
+    );
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "Reset link is invalid or has expired",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Password reset successful. You can now log in.",
+    });
+  } catch (error) {
+    console.error("Reset password error:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
@@ -418,4 +567,6 @@ module.exports = {
   switchMode,
   updateProfile,
   changePassword,
+  forgotPassword,
+  resetPassword,
 };

@@ -1,0 +1,5 @@
+$kind: http-request
+name: Freelancer Single task details dekhte pabe /api/tasks-details/id
+url: ""
+method: GET
+order: 13000

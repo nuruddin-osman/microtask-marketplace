@@ -54,6 +54,8 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // Rate limits (specific ones first, then the general one)
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
+app.use("/api/auth/forgot-password", authLimiter);
+app.use("/api/auth/reset-password", authLimiter);
 app.use("/api/uploads", uploadLimiter);
 app.use("/api/wallet/deposit", walletLimiter);
 app.use("/api/wallet/withdrawal", walletLimiter);
