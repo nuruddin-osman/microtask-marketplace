@@ -70,6 +70,7 @@ const freelancerRoutes = require("./routes/freelancerRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
+const categoryRoutes = require("./routes/categoryRoutes");
 
 app.use("/api", authRoutes);
 app.use("/api", taskRoutes);
@@ -80,6 +81,7 @@ app.use("/api", freelancerRoutes);
 app.use("/api", adminRoutes);
 app.use("/api", notificationRoutes);
 app.use("/api", uploadRoutes);
+app.use("/api", categoryRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
