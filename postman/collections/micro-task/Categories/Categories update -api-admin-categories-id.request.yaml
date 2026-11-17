@@ -1,0 +1,5 @@
+$kind: http-request
+name: Categories update /api/admin/categories/:id
+url: ""
+method: GET
+order: 4000

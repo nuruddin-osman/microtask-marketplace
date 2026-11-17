@@ -1,0 +1,5 @@
+$kind: http-request
+name: User message korte parbe /api/support/tickets/:id
+url: ""
+method: GET
+order: 4000

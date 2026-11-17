@@ -1,0 +1,5 @@
+$kind: http-request
+name: Admin reply solved /api/admin/support/tickets/:id/status
+url: ""
+method: GET
+order: 8000

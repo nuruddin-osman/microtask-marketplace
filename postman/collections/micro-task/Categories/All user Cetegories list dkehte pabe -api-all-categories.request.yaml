@@ -1,0 +1,5 @@
+$kind: http-request
+name: All user Cetegories list dkehte pabe /api/all/categories
+url: ""
+method: GET
+order: 3000

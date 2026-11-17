@@ -1,0 +1,5 @@
+$kind: http-request
+name: Self ticket dekhte pabe /api/support/tickets
+url: ""
+method: GET
+order: 2000

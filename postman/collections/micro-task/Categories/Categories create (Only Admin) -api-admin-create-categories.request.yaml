@@ -1,0 +1,5 @@
+$kind: http-request
+name: Categories create (Only Admin) /api/admin/create/categories
+url: ""
+method: GET
+order: 2000

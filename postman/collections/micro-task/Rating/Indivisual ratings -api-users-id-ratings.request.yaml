@@ -1,0 +1,5 @@
+$kind: http-request
+name: Indivisual ratings /api/users/:id/ratings
+url: ""
+method: GET
+order: 2000

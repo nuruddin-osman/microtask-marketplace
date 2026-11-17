@@ -1,0 +1,5 @@
+$kind: http-request
+name: Freelancer rating dite parbe /api/submissions/:id/rating
+url: ""
+method: GET
+order: 1000

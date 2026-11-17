@@ -1,0 +1,5 @@
+$kind: http-request
+name: Admin single message dekhte pabe /api/admin/support/tickets/:id
+url: ""
+method: GET
+order: 6000

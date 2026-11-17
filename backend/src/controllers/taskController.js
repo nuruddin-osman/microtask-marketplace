@@ -196,7 +196,10 @@ const createTask = async (req, res) => {
 
 const getTasks = async (req, res) => {
   try {
-    const tasks = await Task.find({ status: "active" })
+    const tasks = await Task.find({
+      status: "active",
+      advertiser: { $ne: req.user._id },
+    })
       .populate("advertiser", "name username")
       .sort({ createdAt: -1 })
       .lean();
@@ -243,6 +246,13 @@ const getTaskDetails = async (req, res) => {
         .select("_id status proofText proofUrl createdAt updatedAt reviewedAt")
         .lean(),
     ]);
+
+    if (task && task.advertiser._id.toString() === req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "This is your own task. View it from Buyer mode",
+      });
+    }
 
     // Non-active tasks are visible only to a freelancer who already joined them
     if (!task || (task.status !== "active" && !mySubmission)) {
@@ -474,6 +484,7 @@ const acceptTask = async (req, res) => {
         {
           _id: id,
           status: "active",
+          advertiser: { $ne: freelancerId },
           $expr: {
             $lt: [
               {
@@ -496,7 +507,12 @@ const acceptTask = async (req, res) => {
       );
 
       if (!task) {
-        throw new Error("TASK_UNAVAILABLE");
+        const ownTask = await Task.exists({
+          _id: id,
+          advertiser: freelancerId,
+        }).session(session);
+
+        throw new Error(ownTask ? "OWN_TASK" : "TASK_UNAVAILABLE");
       }
 
       [submission] = await TaskSubmission.create(
@@ -517,6 +533,12 @@ const acceptTask = async (req, res) => {
       submission,
     });
   } catch (error) {
+    if (error.message === "OWN_TASK") {
+      return res.status(403).json({
+        success: false,
+        message: "You cannot accept your own task",
+      });
+    }
     if (
       error.message === "TASK_UNAVAILABLE" ||
       error.message === "ALREADY_ACCEPTED"
@@ -985,7 +1007,10 @@ const getBuyerSubmissionDetails = async (req, res) => {
 const getFreelancerTasks = async (req, res) => {
   try {
     // Get all active tasks
-    const tasks = await Task.find({ status: "active" })
+    const tasks = await Task.find({
+      status: "active",
+      advertiser: { $ne: req.user._id },
+    })
       .populate("advertiser", "name username")
       .sort({ createdAt: -1 })
       .lean();

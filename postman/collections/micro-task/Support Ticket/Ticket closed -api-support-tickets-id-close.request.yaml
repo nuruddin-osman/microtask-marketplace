@@ -1,0 +1,5 @@
+$kind: http-request
+name: Ticket closed /api/support/tickets/:id/close
+url: ""
+method: GET
+order: 9000

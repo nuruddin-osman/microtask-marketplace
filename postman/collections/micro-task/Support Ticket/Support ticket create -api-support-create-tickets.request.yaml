@@ -1,0 +1,5 @@
+$kind: http-request
+name: Support ticket create /api/support/create/tickets
+url: ""
+method: GET
+order: 1000

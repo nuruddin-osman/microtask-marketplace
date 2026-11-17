@@ -19,7 +19,7 @@ const {
 
 // ---------- User ----------
 router.post(
-  "/support/tickets",
+  "/support/create/tickets",
   protect,
   validate(schemas.createTicket),
   createTicket,

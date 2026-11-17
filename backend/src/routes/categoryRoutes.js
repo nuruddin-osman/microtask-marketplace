@@ -12,7 +12,7 @@ const {
   updateCategory,
 } = require("../controllers/categoryController");
 
-router.get("/categories", protect, getCategories);
+router.get("/all/categories", protect, getCategories);
 
 router.get(
   "/admin/categories",
@@ -22,7 +22,7 @@ router.get(
 );
 
 router.post(
-  "/admin/categories",
+  "/admin/create/categories",
   protect,
   authorizeRoles("admin"),
   validate(schemas.createCategory),

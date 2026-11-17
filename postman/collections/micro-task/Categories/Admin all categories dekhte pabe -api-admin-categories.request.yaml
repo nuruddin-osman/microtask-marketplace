@@ -1,0 +1,5 @@
+$kind: http-request
+name: Admin all categories dekhte pabe /api/admin/categories
+url: ""
+method: GET
+order: 1000
