@@ -20,6 +20,7 @@ const {
   pauseBuyerTask,
   resumeBuyerTask,
   getTaskDetails,
+  abandonTask,
 } = require("../controllers/taskController");
 const schemas = require("../validators/schemas");
 const { validate, validateId } = require("../middleware/validate");
@@ -157,6 +158,15 @@ router.patch(
   requireActiveMode("buyer"),
   validateId("id"),
   resumeBuyerTask,
+);
+
+router.patch(
+  "/submissions/:id/abandon",
+  protect,
+  authorizeRoles("freelancer"),
+  requireActiveMode("freelancer"),
+  validateId("id"),
+  abandonTask,
 );
 
 module.exports = router;

@@ -24,6 +24,7 @@ const notificationSchema = new mongoose.Schema(
         "appeal_created",
         "appeal_accepted",
         "appeal_rejected",
+        "submission_expired",
       ],
       required: true,
     },

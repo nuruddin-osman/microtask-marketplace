@@ -4,6 +4,7 @@ const PORT = process.env.PORT || 5000;
 const connectDB = require("./config/db");
 const cors = require("cors");
 const helmet = require("helmet");
+const { startExpiryJob } = require("./jobs/expireSubmissions");
 
 // Global middleware
 app.use(helmet());
@@ -18,7 +19,7 @@ app.use("/api/v1/health", (req, res) => {
 });
 
 connectDB();
-
+startExpiryJob();
 // Start server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

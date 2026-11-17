@@ -32,12 +32,23 @@ const taskSubmissionSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["accepted", "submitted", "approved", "rejected"],
+      enum: [
+        "accepted",
+        "submitted",
+        "approved",
+        "rejected",
+        "abandoned",
+        "expired",
+      ],
       default: "accepted",
       index: true,
     },
 
     reviewedAt: {
+      type: Date,
+      default: null,
+    },
+    deadline: {
       type: Date,
       default: null,
     },
@@ -49,6 +60,7 @@ const taskSubmissionSchema = new mongoose.Schema(
 
 // A Freelancer same Task- maximum one time participated।
 taskSubmissionSchema.index({ task: 1, freelancer: 1 }, { unique: true });
+taskSubmissionSchema.index({ status: 1, deadline: 1 });
 
 const TaskSubmission = mongoose.model("TaskSubmission", taskSubmissionSchema);
 

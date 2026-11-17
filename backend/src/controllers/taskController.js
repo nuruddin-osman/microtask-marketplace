@@ -1,9 +1,12 @@
+require("dotenv").config();
 const mongoose = require("mongoose");
 const Task = require("../models/taskModels");
 const TaskSubmission = require("../models/taskSubmissionModels");
 const User = require("../models/userModels");
 const WalletTransaction = require("../models/walletTransactionModels");
 const { notifyUser } = require("../utils/notificationHelper");
+const { releaseAcceptedSlot } = require("../utils/releaseSlot");
+const SUBMISSION_HOURS = Number(process.env.SUBMISSION_HOURS) || 24;
 
 const createTask = async (req, res) => {
   const session = await mongoose.startSession();
@@ -476,7 +479,11 @@ const acceptTask = async (req, res) => {
       }).session(session);
 
       if (existing) {
-        throw new Error("ALREADY_ACCEPTED");
+        throw new Error(
+          ["abandoned", "expired"].includes(existing.status)
+            ? "PREVIOUSLY_RELEASED"
+            : "ALREADY_ACCEPTED",
+        );
       }
 
       // Atomically reserve one available slot.
@@ -521,6 +528,7 @@ const acceptTask = async (req, res) => {
             task: id,
             freelancer: freelancerId,
             status: "accepted",
+            deadline: new Date(Date.now() + SUBMISSION_HOURS * 60 * 60 * 1000),
           },
         ],
         { session },
@@ -537,6 +545,12 @@ const acceptTask = async (req, res) => {
       return res.status(403).json({
         success: false,
         message: "You cannot accept your own task",
+      });
+    }
+    if (error.message === "PREVIOUSLY_RELEASED") {
+      return res.status(409).json({
+        success: false,
+        message: "You released this task earlier and cannot accept it again",
       });
     }
     if (
@@ -1496,6 +1510,49 @@ const changeBuyerTaskStatus = (fromStatus, toStatus, doneText) => {
 const pauseBuyerTask = changeBuyerTaskStatus("active", "paused", "paused");
 const resumeBuyerTask = changeBuyerTaskStatus("paused", "active", "resumed");
 
+// ==========================================
+// FREELANCER: ABANDON AN ACCEPTED TASK
+// ==========================================
+const abandonTask = async (req, res) => {
+  const session = await mongoose.startSession();
+
+  try {
+    let result = null;
+
+    await session.withTransaction(async () => {
+      result = await releaseAcceptedSlot({
+        session,
+        filter: { _id: req.params.id, freelancer: req.user._id },
+        newStatus: "abandoned",
+        note: "Freelancer abandoned a task on a cancelled task; slot reward refunded",
+      });
+    });
+
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Accepted submission not found. Only a task without submitted proof can be abandoned",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Task abandoned. The slot is available to others again",
+      submission: result.submission,
+    });
+  } catch (error) {
+    console.error("Abandon task error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to abandon task",
+    });
+  } finally {
+    await session.endSession();
+  }
+};
+
 module.exports = {
   createTask,
   getTasks,
@@ -1517,4 +1574,5 @@ module.exports = {
   cancelBuyerTask,
   pauseBuyerTask,
   resumeBuyerTask,
+  abandonTask,
 };
