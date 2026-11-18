@@ -2,4 +2,4 @@ $kind: http-request
 name: buyer review kore approve korbe /submissions/:id/review
 url: ""
 method: GET
-order: 7000
+order: 8820

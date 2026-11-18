@@ -23,6 +23,7 @@ router.use(
 
 // Available tasks
 router.get("/freelancer/tasks", getFreelancerTasks);
+// GET /api/freelancer/tasks?category=Social Media&minReward=10&available=true&sort=reward_high&page=1&limit=10
 
 // My submissions
 router.get("/freelancer/my-submissions", getMySubmissions);

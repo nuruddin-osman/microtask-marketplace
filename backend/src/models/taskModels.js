@@ -111,6 +111,7 @@ const taskSchema = new mongoose.Schema(
 );
 
 taskSchema.index({ status: 1, createdAt: -1 });
+taskSchema.index({ status: 1, category: 1, createdAt: -1 });
 
 const Task = mongoose.model("Task", taskSchema);
 

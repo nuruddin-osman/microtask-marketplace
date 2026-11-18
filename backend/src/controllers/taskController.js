@@ -1018,49 +1018,151 @@ const getBuyerSubmissionDetails = async (req, res) => {
 // ==========================================
 // FREELANCER: GET ALL ACTIVE TASKS
 // ==========================================
+// ==========================================
+// FREELANCER: GET ACTIVE TASKS (SEARCH + FILTER + PAGINATION)
+// ==========================================
+const TASK_SORTS = {
+  newest: { createdAt: -1 },
+  oldest: { createdAt: 1 },
+  reward_high: { rewardPerWorker: -1, createdAt: -1 },
+  reward_low: { rewardPerWorker: 1, createdAt: -1 },
+};
+
+const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 const getFreelancerTasks = async (req, res) => {
   try {
-    // Get all active tasks
-    const tasks = await Task.find({
-      status: "active",
-      advertiser: { $ne: req.user._id },
-    })
-      .populate("advertiser", "name username")
-      .sort({ createdAt: -1 })
-      .lean();
+    const { category, search, minReward, maxReward, available } = req.query;
+    const sort = req.query.sort || "newest";
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(
+      50,
+      Math.max(1, parseInt(req.query.limit, 10) || 20),
+    );
 
-    if (!tasks.length) {
-      return res.status(200).json({
-        success: true,
-        count: 0,
-        tasks: [],
+    if (!TASK_SORTS[sort]) {
+      return res.status(400).json({
+        success: false,
+        message: `sort must be one of: ${Object.keys(TASK_SORTS).join(", ")}`,
       });
     }
 
+    // Never show the freelancer their own tasks
+    const filter = {
+      status: "active",
+      advertiser: { $ne: req.user._id },
+    };
+
+    // Category: exact match, ignoring upper/lower case
+    if (typeof category === "string" && category.trim()) {
+      filter.category = new RegExp(`^${escapeRegex(category.trim())}$`, "i");
+    }
+
+    // Search in title and description
+    if (typeof search === "string" && search.trim()) {
+      const regex = new RegExp(escapeRegex(search.trim().slice(0, 100)), "i");
+      filter.$or = [{ title: regex }, { description: regex }];
+    }
+
+    // Reward range
+    const rewardRange = {};
+
+    if (minReward !== undefined) {
+      const min = Number(minReward);
+      if (!Number.isFinite(min) || min < 0) {
+        return res.status(400).json({
+          success: false,
+          message: "minReward must be a positive number",
+        });
+      }
+      rewardRange.$gte = min;
+    }
+
+    if (maxReward !== undefined) {
+      const max = Number(maxReward);
+      if (!Number.isFinite(max) || max < 0) {
+        return res.status(400).json({
+          success: false,
+          message: "maxReward must be a positive number",
+        });
+      }
+      rewardRange.$lte = max;
+    }
+
+    if (
+      rewardRange.$gte !== undefined &&
+      rewardRange.$lte !== undefined &&
+      rewardRange.$gte > rewardRange.$lte
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "minReward cannot be greater than maxReward",
+      });
+    }
+
+    if (Object.keys(rewardRange).length) {
+      filter.rewardPerWorker = rewardRange;
+    }
+
+    // available=true: hide tasks whose slots are all taken
+    if (available !== undefined) {
+      if (!["true", "false"].includes(available)) {
+        return res.status(400).json({
+          success: false,
+          message: "available must be true or false",
+        });
+      }
+
+      if (available === "true") {
+        filter.$expr = {
+          $lt: [
+            {
+              $add: [
+                { $ifNull: ["$completedSlots", 0] },
+                { $ifNull: ["$reservedSlots", 0] },
+              ],
+            },
+            "$totalSlots",
+          ],
+        };
+      }
+    }
+
+    const [tasks, total] = await Promise.all([
+      Task.find(filter)
+        .populate("advertiser", "name username")
+        .sort(TASK_SORTS[sort])
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      Task.countDocuments(filter),
+    ]);
+
+    // Find this freelancer's submissions only for the tasks on this page
     const taskIds = tasks.map((task) => task._id);
 
-    // Find this freelancer's submissions for these tasks
-    const submissions = await TaskSubmission.find({
-      freelancer: req.user._id,
-      task: { $in: taskIds },
-    })
-      .select("_id task status createdAt updatedAt reviewedAt")
-      .lean();
+    const submissions = taskIds.length
+      ? await TaskSubmission.find({
+          freelancer: req.user._id,
+          task: { $in: taskIds },
+        })
+          .select("_id task status createdAt updatedAt reviewedAt deadline")
+          .lean()
+      : [];
 
-    // Map submissions by task ID
     const submissionMap = new Map();
 
     submissions.forEach((submission) => {
       submissionMap.set(submission.task.toString(), {
         _id: submission._id,
         status: submission.status,
+        deadline: submission.deadline,
         createdAt: submission.createdAt,
         updatedAt: submission.updatedAt,
         reviewedAt: submission.reviewedAt,
       });
     });
 
-    // Add remainingSlots and mySubmission to each task
     const formattedTasks = tasks.map((task) => ({
       ...task,
       remainingSlots: Math.max(
@@ -1075,6 +1177,9 @@ const getFreelancerTasks = async (req, res) => {
     return res.status(200).json({
       success: true,
       count: formattedTasks.length,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
       tasks: formattedTasks,
     });
   } catch (error) {
