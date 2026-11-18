@@ -3,6 +3,7 @@ const Review = require("../models/reviewModels");
 const Task = require("../models/taskModels");
 const TaskSubmission = require("../models/taskSubmissionModels");
 const User = require("../models/userModels");
+const { notifyUser } = require("../utils/notificationHelper");
 
 // ==========================================
 // RATE THE OTHER SIDE OF AN APPROVED SUBMISSION
@@ -25,7 +26,7 @@ const rateSubmission = async (req, res) => {
     }
 
     const task = await Task.findById(submission.task)
-      .select("advertiser")
+      .select("advertiser title")
       .lean();
 
     if (!task) {
@@ -68,6 +69,15 @@ const rateSubmission = async (req, res) => {
       reviewerRole,
       rating,
       comment: comment.trim(),
+    });
+
+    await notifyUser({
+      user: reviewee,
+      type: "new_rating",
+      title: "You received a new rating",
+      message: `You received a ${rating}-star rating for "${task.title}".`,
+      relatedTask: task._id,
+      relatedSubmission: submission._id,
     });
 
     return res.status(201).json({

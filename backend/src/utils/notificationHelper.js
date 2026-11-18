@@ -10,6 +10,7 @@ const notifyUser = async ({
   relatedSubmission = null,
   relatedDispute = null,
   relatedTransaction = null,
+  relatedTicket = null,
 }) => {
   try {
     if (!user) return null;
@@ -23,6 +24,7 @@ const notifyUser = async ({
       relatedSubmission,
       relatedDispute,
       relatedTransaction,
+      relatedTicket,
     });
   } catch (error) {
     console.error("Notify user error:", error.message);

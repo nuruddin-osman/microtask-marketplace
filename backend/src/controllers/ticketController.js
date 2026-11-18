@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Ticket = require("../models/ticketModels");
 const Task = require("../models/taskModels");
+const { notifyUser } = require("../utils/notificationHelper");
 
 const MAX_MESSAGES = 100;
 const MAX_ACTIVE_TICKETS = 5;
@@ -375,6 +376,15 @@ const replyTicketAdmin = async (req, res) => {
     if (!ticket) {
       const existing = await Ticket.findById(id).select("status").lean();
 
+      await notifyUser({
+        user: ticket.user,
+        type: "ticket_reply",
+        title: "Support replied to your ticket",
+        message: `Support replied to your ticket "${ticket.subject}".`,
+        relatedTicket: ticket._id,
+        relatedTask: ticket.relatedTask || null,
+      });
+
       return res.status(existing ? 409 : 404).json({
         success: false,
         message: existing
@@ -415,6 +425,20 @@ const updateTicketStatus = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "Ticket not found",
+      });
+    }
+
+    if (["resolved", "closed"].includes(req.body.status)) {
+      await notifyUser({
+        user: ticket.user,
+        type: "ticket_status",
+        title:
+          req.body.status === "resolved" ? "Ticket resolved" : "Ticket closed",
+        message:
+          req.body.status === "resolved"
+            ? `Your ticket "${ticket.subject}" was marked as resolved. Reply to it if you still need help.`
+            : `Your ticket "${ticket.subject}" was closed by support.`,
+        relatedTicket: ticket._id,
       });
     }
 

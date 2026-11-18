@@ -25,6 +25,9 @@ const notificationSchema = new mongoose.Schema(
         "appeal_accepted",
         "appeal_rejected",
         "submission_expired",
+        "ticket_reply",
+        "ticket_status",
+        "new_rating",
       ],
       required: true,
     },
@@ -64,6 +67,12 @@ const notificationSchema = new mongoose.Schema(
     relatedTransaction: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "WalletTransaction",
+      default: null,
+    },
+
+    relatedTicket: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Ticket",
       default: null,
     },
 
