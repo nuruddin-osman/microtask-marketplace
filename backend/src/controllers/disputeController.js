@@ -280,6 +280,7 @@ const reviewAppeal = async (req, res) => {
     let reviewedTask;
     let reviewedSubmission;
     let rewardReleased = 0;
+    let refundAmount = 0;
 
     await session.withTransaction(async () => {
       // 1. Find an unresolved Freelancer appeal
@@ -465,8 +466,46 @@ const reviewAppeal = async (req, res) => {
       } else {
         // Rejected appeal: submission stays rejected.
         reviewedSubmission = submission;
-      }
 
+        // On a cancelled task nobody can use this slot again, so refund its reward.
+        // On an active/paused task the freed slot can be taken by another freelancer.
+        if (reviewedTask.status === "cancelled") {
+          refundAmount = Number(task.rewardPerWorker);
+
+          const updatedBuyer = await User.findOneAndUpdate(
+            { _id: task.advertiser },
+            { $inc: { walletBalance: refundAmount } },
+            { returnDocument: "after", session },
+          );
+
+          if (!updatedBuyer) {
+            throw new Error("Buyer not found");
+          }
+
+          const balanceAfter = Number(updatedBuyer.walletBalance);
+          const balanceBefore = Number(
+            (balanceAfter - refundAmount).toFixed(2),
+          );
+
+          await WalletTransaction.create(
+            [
+              {
+                user: updatedBuyer._id,
+                type: "task_refund",
+                amount: refundAmount,
+                status: "completed",
+                balanceBefore,
+                balanceAfter,
+                relatedTask: task._id,
+                relatedSubmission: submission._id,
+                processedBy: req.user._id,
+                note: "Appeal rejected on a cancelled task; slot reward refunded",
+              },
+            ],
+            { session },
+          );
+        }
+      }
       // 8. Resolve appeal
       reviewedAppeal = await Dispute.findOneAndUpdate(
         {

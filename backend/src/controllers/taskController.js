@@ -597,26 +597,30 @@ const submitProof = async (req, res) => {
       });
     }
 
-    // Find submission belonging to the logged-in freelancer
-    const submission = await TaskSubmission.findOne({
-      _id: id,
-      freelancer: req.user._id,
-      status: "accepted",
-    });
+    // Atomic: find + update in ONE step, so the expiry job cannot slip in between
+    const submission = await TaskSubmission.findOneAndUpdate(
+      {
+        _id: id,
+        freelancer: req.user._id,
+        status: "accepted",
+      },
+      {
+        $set: {
+          proofText: proofText?.trim() || "",
+          proofUrl: proofUrl?.trim() || "",
+          status: "submitted",
+        },
+      },
+      { returnDocument: "after", runValidators: true },
+    );
 
     if (!submission) {
       return res.status(404).json({
         success: false,
         message:
-          "Accepted submission not found, or proof has already been submitted",
+          "Accepted submission not found. It may have expired, been abandoned, or already have proof submitted",
       });
     }
-
-    submission.proofText = proofText?.trim() || "";
-    submission.proofUrl = proofUrl?.trim() || "";
-    submission.status = "submitted";
-
-    await submission.save();
 
     const relatedTask = await Task.findById(submission.task).select(
       "title advertiser",
